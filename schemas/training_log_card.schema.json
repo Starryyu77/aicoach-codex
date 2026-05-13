@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TrainingLogCard",
+  "type": "object",
+  "required": ["date", "location", "training_theme", "planned_session", "actual_completed", "memory_updates"],
+  "properties": {
+    "date": { "type": "string" },
+    "location": { "type": "string" },
+    "duration": { "type": "string" },
+    "training_theme": { "type": "string" },
+    "planned_session": { "type": "array" },
+    "actual_completed": { "type": "array" },
+    "adjustments": { "type": "array" },
+    "equipment_issues": { "type": "array" },
+    "body_feedback": { "type": "array" },
+    "fatigue_level": { "type": "string" },
+    "pain_or_discomfort": { "type": "array" },
+    "unfinished_items": { "type": "array" },
+    "performance_notes": { "type": "array" },
+    "next_session_suggestions": { "type": "array" },
+    "memory_updates": { "type": "array" }
+  }
+}
+

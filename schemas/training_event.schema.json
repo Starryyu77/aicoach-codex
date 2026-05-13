@@ -1,0 +1,19 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TrainingEvent",
+  "type": "object",
+  "required": ["event_type", "entities", "intent", "should_update_memory", "risk_level", "next_action"],
+  "properties": {
+    "event_type": { "type": "string" },
+    "raw_text": { "type": "string" },
+    "clean_text": { "type": "string" },
+    "entities": { "type": "object" },
+    "intent": { "type": "string" },
+    "should_update_memory": { "type": "boolean" },
+    "risk_level": { "enum": ["none", "low", "medium", "high"] },
+    "requires_followup": { "type": "boolean" },
+    "followup_questions": { "type": "array", "items": { "type": "string" } },
+    "next_action": { "type": "string" }
+  }
+}
+

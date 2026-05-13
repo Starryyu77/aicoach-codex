@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "TrainingPlan",
+  "type": "object",
+  "required": ["today_summary", "today_goal", "training_focus", "warm_up", "main_training", "reasoning"],
+  "properties": {
+    "today_summary": { "type": "string" },
+    "today_goal": { "type": "string" },
+    "training_focus": { "type": "string" },
+    "warm_up": { "type": "array" },
+    "main_training": { "type": "array" },
+    "accessory_training": { "type": "array" },
+    "core_or_cardio": { "type": "array" },
+    "cool_down": { "type": "array" },
+    "risk_notes": { "type": "array" },
+    "substitutions": { "type": "array" },
+    "reasoning": { "type": "string" }
+  }
+}
+

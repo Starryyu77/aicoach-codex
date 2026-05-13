@@ -1,0 +1,8 @@
+# Observation Memory
+
+```json
+{
+  "observations": []
+}
+```
+
