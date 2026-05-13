@@ -10,7 +10,7 @@ export type PlanItem = {
 
 export type PlanSection = {
   name: string;
-  items: PlanItem[];
+  items: Array<PlanItem | string>;
 };
 
 export type PlanCard = {
@@ -58,3 +58,64 @@ export type UiResponse = {
   };
 };
 
+export type ProviderCategory = "hermes" | "asr" | "vision";
+
+export type ProviderInstance = {
+  id: string;
+  type: string;
+  label: string;
+  description?: string;
+  baseUrl?: string;
+  model?: string;
+  apiKeyRef?: string;
+  timeoutMs?: number;
+  endpointMode?: "chat_completions" | "responses";
+  hasApiKey?: boolean;
+  extra?: Record<string, unknown>;
+  secretLabel?: string;
+  secretPlaceholder?: string;
+};
+
+export type ProviderPreset = ProviderInstance & {
+  description: string;
+  secretLabel?: string;
+  secretPlaceholder?: string;
+};
+
+export type ProviderConfig = {
+  providers: Record<ProviderCategory, {
+    active: string;
+    instances: ProviderInstance[];
+  }>;
+};
+
+export type ProviderTestResult = {
+  ok: boolean;
+  providerId: string;
+  providerType: string;
+  message: string;
+  details?: unknown;
+};
+
+export type HermesRuntimePreset = {
+  id: string;
+  label: string;
+  description: string;
+  provider: string;
+  model: string;
+  baseUrl?: string;
+  apiKeyRef: string;
+  env: Record<string, string>;
+  secretLabel: string;
+  secretPlaceholder: string;
+};
+
+export type HermesRuntimeConfig = {
+  activePresetId: string;
+  provider: string;
+  model: string;
+  baseUrl?: string;
+  apiKeyRef: string;
+  env: Record<string, string>;
+  hasApiKey: boolean;
+};

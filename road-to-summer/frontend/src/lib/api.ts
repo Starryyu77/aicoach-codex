@@ -1,4 +1,13 @@
-import type { UiResponse } from "./types";
+import type {
+  HermesRuntimeConfig,
+  HermesRuntimePreset,
+  ProviderCategory,
+  ProviderConfig,
+  ProviderInstance,
+  ProviderPreset,
+  ProviderTestResult,
+  UiResponse
+} from "./types";
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://127.0.0.1:8787";
 
@@ -22,10 +31,11 @@ export function sendChat(text: string, source: "text" | "quick_action" = "text")
   return post<UiResponse>("/chat", { text, source });
 }
 
-export function transcribeVoice(audio: string) {
-  return post<{ text: string; confidence: number; provider: string }>("/voice/transcribe", {
+export function transcribeVoice(audio: string, meta: { fileName?: string; mimeType?: string } = {}) {
+  return post<{ text: string; confidence?: number; provider: string; durationMs?: number }>("/voice/transcribe", {
     audio,
-    provider: "mock"
+    fileName: meta.fileName,
+    mimeType: meta.mimeType
   });
 }
 
@@ -57,3 +67,58 @@ export function confirmMemory(id: string) {
   return post("/memory/confirm", { id });
 }
 
+export function getProviders() {
+  return get<ProviderConfig>("/providers");
+}
+
+export function getProviderPresets() {
+  return get<{ presets: Record<ProviderCategory, ProviderPreset[]> }>("/providers/presets");
+}
+
+export function testProvider(category: ProviderCategory, id?: string) {
+  return post<ProviderTestResult>(`/providers/${category}/test`, { id });
+}
+
+export function setActiveProvider(category: ProviderCategory, id: string) {
+  return put<ProviderConfig>(`/providers/${category}/active`, { id });
+}
+
+export function createProviderInstance(category: ProviderCategory, instance: Partial<ProviderInstance> & { apiKey?: string }) {
+  return post<ProviderConfig>(`/providers/${category}/instances`, instance);
+}
+
+export function updateProviderInstance(category: ProviderCategory, id: string, instance: Partial<ProviderInstance> & { apiKey?: string }) {
+  return put<ProviderConfig>(`/providers/${category}/instances/${id}`, instance);
+}
+
+export function deleteProviderInstance(category: ProviderCategory, id: string) {
+  return del<ProviderConfig>(`/providers/${category}/instances/${id}`);
+}
+
+export function getHermesRuntime() {
+  return get<HermesRuntimeConfig>("/hermes-runtime");
+}
+
+export function getHermesRuntimePresets() {
+  return get<{ presets: HermesRuntimePreset[] }>("/hermes-runtime/presets");
+}
+
+export function updateHermesRuntime(config: Partial<HermesRuntimeConfig> & { apiKey?: string }) {
+  return put<HermesRuntimeConfig>("/hermes-runtime", config);
+}
+
+async function put<T>(path: string, body: unknown): Promise<T> {
+  const response = await fetch(`${GATEWAY_URL}${path}`, {
+    method: "PUT",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body)
+  });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<T>;
+}
+
+async function del<T>(path: string): Promise<T> {
+  const response = await fetch(`${GATEWAY_URL}${path}`, { method: "DELETE" });
+  if (!response.ok) throw new Error(await response.text());
+  return response.json() as Promise<T>;
+}

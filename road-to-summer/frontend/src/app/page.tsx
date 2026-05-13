@@ -10,7 +10,7 @@ export default function HomePage() {
             Hermes 底座上的运动健身 Agent 扩展。第一版聚焦训练驾驶舱、语音输入、视频动作反馈 mock、结构化计划和训练卡片。
           </p>
         </div>
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid gap-3 sm:grid-cols-4">
           <Link className="rounded-lg bg-white p-5 shadow-sm" href="/training">
             <span className="text-sm text-[#536158]">开始</span>
             <div className="mt-2 text-xl font-semibold">Training Cockpit</div>
@@ -23,9 +23,12 @@ export default function HomePage() {
             <span className="text-sm text-[#536158]">查看</span>
             <div className="mt-2 text-xl font-semibold">Hermes Memory</div>
           </Link>
+          <Link className="rounded-lg bg-white p-5 shadow-sm" href="/settings">
+            <span className="text-sm text-[#536158]">配置</span>
+            <div className="mt-2 text-xl font-semibold">Providers</div>
+          </Link>
         </div>
       </section>
     </main>
   );
 }
-

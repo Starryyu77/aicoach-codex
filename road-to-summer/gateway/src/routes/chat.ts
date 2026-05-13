@@ -30,7 +30,8 @@ export async function handleChat(context: GatewayContext, request: ChatRequest) 
         ? "training_plan"
         : "plan_patch"
   });
-  const hermes = await context.hermesClient.sendMessage(message);
+  const hermesProvider = await context.providerRegistry.getHermesProvider();
+  const hermes = await hermesProvider.sendMessage(message);
   const output = parseHermesResponse(hermes);
   const ui = mapAgentOutputToUi(output, session);
   if (ui.current_session) await saveCurrentSession(ui.current_session, context.stateRoot);
@@ -45,4 +46,3 @@ export async function handleChat(context: GatewayContext, request: ChatRequest) 
     ui
   };
 }
-

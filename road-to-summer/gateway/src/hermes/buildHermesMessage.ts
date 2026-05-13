@@ -19,11 +19,11 @@ export function buildHermesMessage(input: BuildHermesMessageInput): HermesMessag
     memory_summary: input.memorySummary || {},
     movement_assessment: input.movementAssessment,
     instruction: [
-      "Use the Road to Summer Skill Pack.",
+      "Use the Hermes skill named road_to_summer.",
+      "The skill files are under road-to-summer/hermes-extension/skills/road_to_summer in this project.",
       "Respect output_contract.md.",
       input.expectedType ? `Return strict ${input.expectedType} JSON.` : "Return strict JSON.",
       "Do not return long natural-language-only answers."
     ].join(" ")
   };
 }
-

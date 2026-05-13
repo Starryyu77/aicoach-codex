@@ -1,7 +1,6 @@
-import type { HermesClient } from "../hermes/HermesClient.ts";
+import type { ProviderRegistry } from "../providers/ProviderRegistry.ts";
 
 export type GatewayContext = {
-  hermesClient: HermesClient;
+  providerRegistry: ProviderRegistry;
   stateRoot?: string;
 };
-

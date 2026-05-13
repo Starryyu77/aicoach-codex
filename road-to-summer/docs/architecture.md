@@ -47,6 +47,52 @@ UI Gateway 不是传统业务后端，不连接数据库。
 - 校验 Hermes JSON。
 - 映射成前端 UI 数据。
 - 缓存轻量 UI 状态和训练卡片。
+- 管理 provider 配置和 secret 引用。
+- 暴露 provider presets，让前端可做一体化配置向导。
+
+## Provider Layer
+
+Gateway 通过 `ProviderRegistry` 获取 active provider，route 不直接 import mock：
+
+```text
+ProviderRegistry
+  -> HermesProvider
+     - mock
+     - hermes-api-server
+     - openai-compatible-hermes
+  -> AsrProvider
+     - mock
+     - openai-whisper
+     - groq-whisper
+     - doubao-asr
+     - local-whisper
+  -> VisionProvider
+     - mock
+     - external-pose-http
+```
+
+配置文件：
+
+- `.runtime/config.json`：只保存非敏感 provider 配置。
+- `.runtime/secrets.env`：保存 API key，或从环境变量读取。
+
+前端 Settings 页面只显示 `hasApiKey`，不读取或展示明文 API key。
+
+## Setup Flow
+
+第一版设置流程在 Road to Summer 项目内完成：
+
+```text
+Settings
+  -> GET /providers/presets
+  -> 用户选择 Hermes / ASR / Vision 模板
+  -> 填 baseUrl / model / API key
+  -> POST /providers/:category/instances
+  -> PUT /providers/:category/active
+  -> POST /providers/:category/test
+```
+
+用户不需要直接编辑 Hermes config；Gateway 只作为配置和调用适配层，不重写 Hermes Runtime。
 
 允许的轻量文件：
 
@@ -54,6 +100,8 @@ UI Gateway 不是传统业务后端，不连接数据库。
 - `current_plan.json`
 - `training_cards/*.json`
 - `mock_memory.json`
+- `.runtime/config.json`
+- `.runtime/secrets.env`
 
 ## 禁止范围
 
@@ -64,4 +112,3 @@ UI Gateway 不是传统业务后端，不连接数据库。
 - CRM。
 - 排课、支付、会员。
 - 重写 Hermes Memory / Session / Agent Runtime。
-

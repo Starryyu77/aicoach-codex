@@ -2,6 +2,8 @@
 .env.*
 !.env.example
 .DS_Store
+.runtime/
+road-to-summer/gateway/state/
 
 node_modules/
 .next/

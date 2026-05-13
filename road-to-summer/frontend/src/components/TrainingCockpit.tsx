@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { assessMovement, endSession, sendChat, startSession } from "../lib/api";
-import type { PlanCard } from "../lib/types";
+import type { PlanCard, PlanItem } from "../lib/types";
 import { CameraInputButton } from "./CameraInputButton";
 import { ChatPanel } from "./ChatPanel";
 import { CurrentExerciseCard } from "./CurrentExerciseCard";
@@ -23,6 +23,10 @@ const DEFAULT_ACTIONS = [
   "结束训练"
 ];
 
+function isPlanItem(item: PlanItem | string): item is PlanItem {
+  return typeof item === "object" && item !== null && "exercise" in item;
+}
+
 export function TrainingCockpit() {
   const [plan, setPlan] = useState<PlanCard | undefined>();
   const [currentExercise, setCurrentExercise] = useState("高位下拉");
@@ -32,8 +36,8 @@ export function TrainingCockpit() {
   const [isBusy, setBusy] = useState(false);
 
   const currentItem = useMemo(() => {
-    return plan?.sections.flatMap((section) => section.items).find((item) => item.exercise === currentExercise)
-      || plan?.sections.flatMap((section) => section.items)[0];
+    const planItems = plan?.sections.flatMap((section) => section.items).filter(isPlanItem) || [];
+    return planItems.find((item) => item.exercise === currentExercise) || planItems[0];
   }, [plan, currentExercise]);
 
   async function submit(text: string, source: "text" | "quick_action" = "text") {
@@ -120,4 +124,3 @@ export function TrainingCockpit() {
     </main>
   );
 }
-

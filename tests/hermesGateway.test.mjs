@@ -3,7 +3,8 @@ import { mkdtemp } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
-import { MockHermesClient } from "../road-to-summer/gateway/src/hermes/HermesClient.ts";
+import { ProviderConfigStore } from "../road-to-summer/gateway/src/providers/ProviderConfigStore.ts";
+import { ProviderRegistry } from "../road-to-summer/gateway/src/providers/ProviderRegistry.ts";
 import { handleChat } from "../road-to-summer/gateway/src/routes/chat.ts";
 import { handleHistoryList } from "../road-to-summer/gateway/src/routes/history.ts";
 import { handleMemoryConfirm, handleMemoryGet } from "../road-to-summer/gateway/src/routes/memory.ts";
@@ -12,9 +13,10 @@ import { handleVisionAssess } from "../road-to-summer/gateway/src/routes/vision.
 import { handleVoiceTranscribe } from "../road-to-summer/gateway/src/routes/voice.ts";
 
 async function context() {
+  const stateRoot = await mkdtemp(path.join(tmpdir(), "rts-gateway-"));
   return {
-    hermesClient: new MockHermesClient(),
-    stateRoot: await mkdtemp(path.join(tmpdir(), "rts-gateway-"))
+    providerRegistry: new ProviderRegistry(new ProviderConfigStore(stateRoot)),
+    stateRoot
   };
 }
 
@@ -100,8 +102,8 @@ test("scenario 8: session end saves training card and history can list it", asyn
 });
 
 test("voice transcribe mock returns text", async () => {
-  const result = await handleVoiceTranscribe({ audio: "高位下拉有人了", provider: "mock" });
+  const ctx = await context();
+  const result = await handleVoiceTranscribe(ctx, { audio: "高位下拉有人了", provider: "mock" });
   assert.equal(result.text, "高位下拉有人了");
-  assert.equal(result.provider, "mock");
+  assert.equal(result.provider, "mock-asr");
 });
-

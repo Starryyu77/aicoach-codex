@@ -1,4 +1,12 @@
-import type { PlanCard } from "../lib/types";
+import type { PlanCard, PlanItem } from "../lib/types";
+
+function isPlanItem(item: PlanItem | string): item is PlanItem {
+  return typeof item === "object" && item !== null && "exercise" in item;
+}
+
+function itemLabel(item: PlanItem | string) {
+  return isPlanItem(item) ? item.exercise : item;
+}
 
 export function CurrentPlanCard({ plan }: { plan?: PlanCard }) {
   return (
@@ -12,13 +20,23 @@ export function CurrentPlanCard({ plan }: { plan?: PlanCard }) {
             <div key={section.name}>
               <h3 className="text-sm font-semibold text-[#1f7a5a]">{section.name}</h3>
               <div className="mt-2 overflow-hidden rounded-md border border-[#e0e7df]">
-                {section.items.map((item) => (
-                  <div className="grid gap-2 border-b border-[#e0e7df] p-3 last:border-b-0 md:grid-cols-[1.1fr_0.8fr_1fr]" key={`${section.name}-${item.exercise}`}>
-                    <div className="font-medium">{item.exercise}</div>
-                    <div className="text-sm text-[#536158]">{item.sets} 组 x {item.reps} · {item.intensity}</div>
-                    <div className="text-sm text-[#536158]">休息 {item.rest}</div>
-                  </div>
-                ))}
+                {section.items.map((item, index) => {
+                  const key = `${section.name}-${index}-${itemLabel(item)}`;
+                  if (!isPlanItem(item)) {
+                    return (
+                      <div className="border-b border-[#e0e7df] p-3 text-sm text-[#536158] last:border-b-0" key={key}>
+                        {item}
+                      </div>
+                    );
+                  }
+                  return (
+                    <div className="grid gap-2 border-b border-[#e0e7df] p-3 last:border-b-0 md:grid-cols-[1.1fr_0.8fr_1fr]" key={key}>
+                      <div className="font-medium">{item.exercise}</div>
+                      <div className="text-sm text-[#536158]">{item.sets || "-"} x {item.reps || "-"} · {item.intensity || "-"}</div>
+                      <div className="text-sm text-[#536158]">休息 {item.rest || "-"}</div>
+                    </div>
+                  );
+                })}
               </div>
             </div>
           ))}
@@ -28,4 +46,3 @@ export function CurrentPlanCard({ plan }: { plan?: PlanCard }) {
     </section>
   );
 }
-
