@@ -1,5 +1,12 @@
 export type PlanItem = {
   exercise: string;
+  role?: string;
+  movement_pattern?: string;
+  primary_muscles?: string[];
+  selection_reason?: string;
+  source_note?: string;
+  common_mistakes?: string[];
+  adjustment_rule?: string;
   sets: string;
   reps: string;
   intensity: string;
@@ -23,6 +30,22 @@ export type PlanCard = {
   sections: PlanSection[];
   risk_notes: string[];
   reasoning: string;
+  framework_trace?: string[];
+  official_source_trace?: OfficialSourceTrace[];
+  decision_basis?: string[];
+  recent_training_summary?: string[];
+  quality_warnings?: string[];
+};
+
+export type OfficialSourceTrace = {
+  framework: string;
+  model: string;
+  official_source: string;
+  source_url: string;
+  source_location: string;
+  principle: string;
+  applied_decision: string;
+  why_it_matters: string;
 };
 
 export type TrainingCard = {
@@ -48,6 +71,48 @@ export type TrainingCard = {
   next_session_suggestions: string[];
 };
 
+export type AgentUiComponentType =
+  | "surface"
+  | "section"
+  | "coach_message"
+  | "plan_summary"
+  | "plan_sections"
+  | "current_exercise"
+  | "patch_card"
+  | "training_card"
+  | "memory_updates"
+  | "action_row";
+
+export type AgentUiComponent = {
+  id: string;
+  type: AgentUiComponentType;
+  props?: Record<string, unknown>;
+  children?: string[];
+};
+
+export type AgentUiDocument = {
+  version: "rts-a2ui-0.1";
+  surface: "training_cockpit" | "history" | "memory";
+  root: string;
+  components: AgentUiComponent[];
+  data: {
+    chat_message: string;
+    plan?: PlanCard;
+    session?: SessionSnapshot;
+    patch?: {
+      operation: string;
+      target_exercise: string;
+      from?: string;
+      to?: string;
+      reason: string;
+      next_instruction: string;
+    };
+    training_card?: TrainingCard;
+    memory_updates?: unknown[];
+    quick_actions?: string[];
+  };
+};
+
 export type UiResponse = {
   hermes_output: unknown;
   ui: {
@@ -60,6 +125,7 @@ export type UiResponse = {
       session_date?: string;
       target_date?: string;
       target_date_label?: string;
+      phase?: string;
       progress?: string;
       current_exercise?: string;
       current_set?: number;
@@ -68,6 +134,7 @@ export type UiResponse = {
     quick_actions?: string[];
     training_card?: TrainingCard;
     memory_updates?: unknown[];
+    agent_ui?: AgentUiDocument;
   };
 };
 

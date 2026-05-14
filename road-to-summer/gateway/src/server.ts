@@ -4,8 +4,8 @@ import { handleChat } from "./routes/chat.ts";
 import { handleVoiceTranscribe } from "./routes/voice.ts";
 import { handleVisionAssess } from "./routes/vision.ts";
 import { handleEndSession, handleGetCurrentSession, handleStartSession } from "./routes/session.ts";
-import { handleHistoryDelete, handleHistoryDetail, handleHistoryList } from "./routes/history.ts";
-import { handleMemoryConfirm, handleMemoryGet } from "./routes/memory.ts";
+import { handleHistoryDelete, handleHistoryDetail, handleHistoryList, handleHistoryUpdate } from "./routes/history.ts";
+import { handleMemoryConfirm, handleMemoryGet, handleMemoryRefresh } from "./routes/memory.ts";
 import {
   handleHermesRuntimeGet,
   handleHermesRuntimePresetsGet,
@@ -116,8 +116,10 @@ export function createGatewayServer(context: GatewayContext = { providerRegistry
       if (method === "POST" && url.pathname === "/session/end") return send(request, response, 200, await handleEndSession(context, await readBody(request)));
       if (method === "GET" && url.pathname === "/history") return send(request, response, 200, await handleHistoryList(context));
       if (method === "DELETE" && url.pathname.startsWith("/history/")) return send(request, response, 200, await handleHistoryDelete(context, url.pathname.split("/").at(-1) || ""));
+      if (method === "PUT" && url.pathname.startsWith("/history/")) return send(request, response, 200, await handleHistoryUpdate(context, url.pathname.split("/").at(-1) || "", await readBody(request)));
       if (method === "GET" && url.pathname.startsWith("/history/")) return send(request, response, 200, await handleHistoryDetail(context, url.pathname.split("/").at(-1) || ""));
       if (method === "GET" && url.pathname === "/memory") return send(request, response, 200, await handleMemoryGet(context));
+      if (method === "POST" && url.pathname === "/memory/refresh") return send(request, response, 200, await handleMemoryRefresh(context, await readBody(request)));
       if (method === "POST" && url.pathname === "/memory/confirm") return send(request, response, 200, await handleMemoryConfirm(context, await readBody(request)));
       if (method === "GET" && url.pathname === "/hermes-runtime") return send(request, response, 200, await handleHermesRuntimeGet(context));
       if (method === "PUT" && url.pathname === "/hermes-runtime") return send(request, response, 200, await handleHermesRuntimeUpdate(context, await readBody(request)));
@@ -145,9 +147,21 @@ export function createGatewayServer(context: GatewayContext = { providerRegistry
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {
-  const port = Number(process.env.PORT || 8787);
+  const port = Number(process.env.GATEWAY_PORT || process.env.PORT || 8787);
   const host = process.env.HOST || "127.0.0.1";
-  createGatewayServer().listen(port, host, () => {
+  const server = createGatewayServer();
+  server.on("error", (error: NodeJS.ErrnoException) => {
+    if (error.code === "EADDRINUSE") {
+      console.error(`Road to Summer Gateway could not start because http://${host}:${port} is already in use.`);
+      console.error(`Check the existing service: curl http://${host}:${port}/session/current`);
+      console.error("Stop the existing process, or start this Gateway on another port:");
+      console.error(`  GATEWAY_PORT=${port + 1} npm run gateway`);
+      process.exit(1);
+    }
+    console.error(`Road to Summer Gateway failed to start: ${error.message}`);
+    process.exit(1);
+  });
+  server.listen(port, host, () => {
     console.log(`Road to Summer Gateway listening on http://${host}:${port}`);
   });
 }

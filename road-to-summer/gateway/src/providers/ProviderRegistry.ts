@@ -1,6 +1,5 @@
 import type { AsrProvider, HermesProvider, ProviderCategory, ProviderInstance, VisionProvider } from "./types.ts";
 import { ProviderConfigStore } from "./ProviderConfigStore.ts";
-import { MockHermesProvider } from "./hermes/MockHermesProvider.ts";
 import { HermesApiServerProvider } from "./hermes/HermesApiServerProvider.ts";
 import { OpenAICompatibleHermesProvider } from "./hermes/OpenAICompatibleHermesProvider.ts";
 import { MockAsrProvider } from "./asr/MockAsrProvider.ts";
@@ -31,7 +30,7 @@ export class ProviderRegistry {
   }
 
   createHermesProvider(instance: ProviderInstance): HermesProvider {
-    if (instance.type === "mock") return new MockHermesProvider(instance);
+    if (instance.type === "mock") throw new Error("Mock Hermes is disabled for /chat. Configure local-hermes or another real Hermes endpoint.");
     if (instance.type === "hermes-api-server") return new HermesApiServerProvider(instance, { runtimeRoot: this.store.runtimeRoot });
     if (instance.type === "openai-compatible-hermes") return new OpenAICompatibleHermesProvider(instance, { runtimeRoot: this.store.runtimeRoot });
     throw new Error(`Unsupported Hermes provider type: ${instance.type}`);

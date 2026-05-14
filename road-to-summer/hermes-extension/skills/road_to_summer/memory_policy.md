@@ -28,3 +28,23 @@ Hermes owns long-term memory. Road to Summer only proposes structured memory upd
 
 Long-term memory updates require user confirmation. Do not auto-save every utterance.
 
+## Replacement Semantics
+
+When a user corrects a stable preference, do not append a second contradictory preference.
+
+Examples:
+
+- Old memory: `不喜欢波比跳`
+- User says: `我挺喜欢波比跳`
+- Correct action: create a pending replacement update that removes `不喜欢波比跳` and adds `喜欢波比跳`.
+
+Preference replacement updates should include:
+
+- `category: preference`
+- `operation: replace`
+- `key`
+- `value`
+- `remove_values`
+- `requires_confirmation: true`
+
+After confirmation, the active preference list must contain the new preference and must not continue showing the old contradictory one.

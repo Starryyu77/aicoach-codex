@@ -84,7 +84,7 @@ npm test
 Expected:
 
 ```text
-50 tests passed
+52 tests passed
 0 failed
 ```
 
@@ -102,6 +102,7 @@ Coverage:
 - Time context parsing and absolute date propagation.
 - Explicit text date overrides stale selected/session date.
 - Historical review returns `training_review` and does not create training cards.
+- Historical card metadata editing updates JSON and regenerated Markdown.
 
 This suite does not spend real MiniMax / Doubao quota except when manually testing live endpoints.
 
@@ -191,6 +192,23 @@ Expected:
 - Series review uses `scope = recent_series` or `multi_day`.
 - History card count does not increase.
 
+### TC-HISTORY-EDIT-001: Edit Training Card Date
+
+Steps:
+
+1. Open `/history`.
+2. Click `编辑` on a training card.
+3. Change `训练日期` from one date to another, for example `2026-05-13` -> `2026-05-12`.
+4. Save.
+
+Expected:
+
+- Gateway calls `PUT /history/:id`.
+- `training_cards/:id.json` updates `date`.
+- `training_cards/:id.md` is regenerated with the new date.
+- History list refreshes the edited card in place.
+- Invalid date formats are rejected; use `YYYY-MM-DD`.
+
 ## 2. Real Hermes Smoke Test
 
 ### TC-HERMES-001: Capabilities
@@ -245,6 +263,32 @@ Failure handling:
 
 - If HTTP 401 appears, verify CN endpoint and `MINIMAX_CN_API_KEY`.
 - If timeout appears, verify `local-hermes.timeoutMs >= 180000`.
+
+### TC-HERMES-004: Recent Training Conflict Guard
+
+Precondition:
+
+- History contains:
+  - `2026-05-12` upper push/pull / chest-back-shoulder session.
+  - `2026-05-13` high-intensity lower-body / legs-glutes session.
+
+Request:
+
+```bash
+curl -X POST http://127.0.0.1:8787/chat \
+  -H 'content-type: application/json' \
+  -d '{"text":"今天该练什么？","source":"text","timezone":"Asia/Singapore"}'
+```
+
+Expected:
+
+- Gateway reads recent cards before saving the plan.
+- Plan is not high-volume chest/back/shoulder.
+- Plan is not high-intensity lower-body.
+- Plan title or goal shifts to recovery / mobility / functional maintenance.
+- `recent_training_summary` names the recent sessions used.
+- `quality_warnings` explains the shoulder/back and lower-body conflict.
+- Repeated exercises are removed before the plan reaches the frontend.
 
 ## 3. Training Cockpit Manual Flow
 
@@ -605,6 +649,49 @@ Expected:
 - Long-term memory display updates.
 - Non-existing id returns controlled error, not a crash.
 
+### TC-MEM-006: Dynamic Memory Display Refresh
+
+Requests:
+
+```bash
+curl -X POST http://127.0.0.1:8787/memory/refresh \
+  -H 'content-type: application/json' \
+  -d '{"reason":"page_open"}'
+```
+
+```bash
+curl -X POST http://127.0.0.1:8787/memory/refresh \
+  -H 'content-type: application/json' \
+  -d '{"reason":"page_leave"}'
+```
+
+Expected:
+
+- Response includes `display.updated_at`, `display.refresh_reason`, `display.headline`, `display.sections`, and `display.source_counts`.
+- `page_open` refreshes before the Memory page renders its summary.
+- `page_leave` refreshes the display cache for the next visit.
+- Snapshot includes recent training cards, pending memory updates, risks, preferences, observations, equipment, and location notes where available.
+- This refresh only updates the UI display cache; it does not write unconfirmed content into long-term Memory.
+
+### TC-MEM-007: Preference Correction Replaces Old Preference
+
+Input:
+
+```text
+我挺喜欢波比跳和高强度 HIIT 的。
+```
+
+Expected:
+
+- Gateway creates pending `preference` memory updates even if Hermes only replies in natural language.
+- Pending updates use `operation = replace`.
+- After confirmation:
+  - `不喜欢波比跳` is removed from `preferences`.
+  - `不喜欢高强度 HIIT；如确有价值需先解释` is removed from `preferences`.
+  - `喜欢波比跳` is added.
+  - `喜欢高强度 HIIT` is added.
+- Memory display refresh no longer shows contradictory old dislikes.
+
 ## 7. Settings / Provider Tests
 
 Open:
@@ -637,16 +724,16 @@ Expected:
 
 Steps:
 
-1. Switch Hermes Provider to `mock-hermes`.
+1. Keep Hermes Provider as `local-hermes`.
 2. Send `今天该练什么？`.
-3. Switch back to `local-hermes`.
+3. Temporarily stop Hermes API Server.
 4. Send `今天该练什么？` again.
 
 Expected:
 
-- Mock mode is fast and deterministic.
-- Real mode uses Hermes API Server and is slower.
-- No frontend code changes are needed.
+- Real mode uses Hermes API Server.
+- If Hermes is unavailable, Gateway returns a controlled error.
+- Gateway must not fall back to local Mock Hermes or template replies.
 
 ## 8. Negative / Failure Tests
 
@@ -668,11 +755,11 @@ Expected:
 
 Method:
 
-- Temporarily use a mock Hermes response that returns prose or malformed JSON.
+- Configure a real Hermes test endpoint or proxy to return prose or malformed JSON.
 
 Expected:
 
-- `parseHermesResponse` attempts repair / fallback.
+- `parseHermesResponse` attempts JSON repair.
 - If repair fails, Gateway returns controlled error.
 - Frontend does not parse raw large natural-language text.
 

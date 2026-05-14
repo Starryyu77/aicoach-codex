@@ -163,7 +163,7 @@ MINIMAX_BASE_URL=https://api.minimax.io/anthropic
 MINIMAX_API_KEY=<secret>
 ```
 
-如果启动本地 Hermes API Server，需要让 Hermes 进程读取 `.runtime/secrets.env` 或等价环境变量；之后在 Settings 中把 `Hermes Provider` 从 `mock-hermes` 切到 `local-hermes`。
+如果启动本地 Hermes API Server，需要让 Hermes 进程读取 `.runtime/secrets.env` 或等价环境变量；`/chat` 要求 active `Hermes Provider` 是 `local-hermes` 或其他真实 Hermes endpoint。Mock Hermes 不能用于训练对话。
 
 当前本机实测可用配置是 MiniMax CN Token Plan：
 

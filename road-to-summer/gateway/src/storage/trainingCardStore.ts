@@ -10,11 +10,34 @@ export type DeleteTrainingCardResult = {
   removed_paths: string[];
 };
 
+export type UpdateTrainingCardInput = {
+  date?: string;
+  date_label?: string;
+  timezone?: string;
+  location?: string;
+  duration?: string;
+  theme?: string;
+};
+
 function assertTrainingCardId(id: string): string {
   if (!/^card-\d+$/.test(id)) {
     throw new Error("Invalid training card id.");
   }
   return id;
+}
+
+function assertIsoDate(date?: string): string | undefined {
+  if (date === undefined) return undefined;
+  const trimmed = String(date).trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(trimmed)) {
+    throw new Error("Invalid training card date. Use YYYY-MM-DD.");
+  }
+  return trimmed;
+}
+
+function cleanText(value?: string): string | undefined {
+  if (value === undefined) return undefined;
+  return String(value).trim();
 }
 
 async function withMarkdown(card: TrainingCard, jsonPath: string): Promise<TrainingCard> {
@@ -34,6 +57,14 @@ async function withMarkdown(card: TrainingCard, jsonPath: string): Promise<Train
     markdown_path: markdownPath,
     markdown
   };
+}
+
+function sortCards(cards: TrainingCard[]): TrainingCard[] {
+  return [...cards].sort((a, b) => {
+    const dateCompare = (b.date || "").localeCompare(a.date || "");
+    if (dateCompare !== 0) return dateCompare;
+    return (b.id || "").localeCompare(a.id || "");
+  });
 }
 
 export async function saveTrainingCard(card: TrainingCard, stateRoot?: string): Promise<TrainingCard> {
@@ -61,7 +92,7 @@ export async function listTrainingCards(stateRoot?: string): Promise<TrainingCar
         return card ? withMarkdown(card, filePath) : null;
       })
     );
-    return cards.filter((card): card is TrainingCard => card !== null);
+    return sortCards(cards.filter((card): card is TrainingCard => card !== null));
   } catch {
     return [];
   }
@@ -96,4 +127,30 @@ export async function deleteTrainingCard(id: string, stateRoot?: string): Promis
     id: safeId,
     removed_paths: removed
   };
+}
+
+export async function updateTrainingCard(id: string, patch: UpdateTrainingCardInput, stateRoot?: string): Promise<TrainingCard> {
+  const safeId = assertTrainingCardId(id);
+  const paths = getStorePaths(stateRoot);
+  await ensureStateDirs(paths);
+  const filePath = path.join(paths.trainingCardsDir, `${safeId}.json`);
+  const existing = await readJson<TrainingCard | null>(filePath, null);
+  if (!existing) throw new Error(`Training card not found: ${safeId}`);
+
+  const next: TrainingCard = {
+    ...existing,
+    id: safeId,
+    storage_path: filePath,
+    markdown_path: path.join(paths.trainingCardsDir, `${safeId}.md`),
+    date: assertIsoDate(patch.date) || existing.date,
+    date_label: patch.date_label !== undefined ? cleanText(patch.date_label) : existing.date_label,
+    timezone: patch.timezone !== undefined ? cleanText(patch.timezone) : existing.timezone,
+    location: patch.location !== undefined ? cleanText(patch.location) || existing.location : existing.location,
+    duration: patch.duration !== undefined ? cleanText(patch.duration) : existing.duration,
+    theme: patch.theme !== undefined ? cleanText(patch.theme) || existing.theme : existing.theme
+  };
+  next.markdown = createTrainingCardMarkdown(next);
+  await writeJson(filePath, next);
+  await writeFile(next.markdown_path || filePath.replace(/\.json$/, ".md"), next.markdown, "utf8");
+  return next;
 }

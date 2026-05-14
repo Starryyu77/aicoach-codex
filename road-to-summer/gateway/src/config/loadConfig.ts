@@ -12,15 +12,8 @@ export function defaultProviderConfig(): ProviderConfig {
   return {
     providers: {
       hermes: {
-        active: "mock-hermes",
+        active: "local-hermes",
         instances: [
-          {
-            id: "mock-hermes",
-            type: "mock",
-            label: "Mock Hermes",
-            model: "mock-hermes-agent",
-            timeoutMs: 10000
-          },
           {
             ...PROVIDER_PRESETS.hermes[0]
           }

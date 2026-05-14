@@ -7,6 +7,7 @@ export type StorePaths = {
   currentPlanFile: string;
   trainingCardsDir: string;
   memoryFile: string;
+  memoryDisplayFile: string;
 };
 
 export function getStorePaths(stateRoot = path.resolve("road-to-summer/gateway/state")): StorePaths {
@@ -15,7 +16,8 @@ export function getStorePaths(stateRoot = path.resolve("road-to-summer/gateway/s
     sessionFile: path.join(stateRoot, "current_session.json"),
     currentPlanFile: path.join(stateRoot, "current_plan.json"),
     trainingCardsDir: path.join(stateRoot, "training_cards"),
-    memoryFile: path.join(stateRoot, "mock_memory.json")
+    memoryFile: path.join(stateRoot, "mock_memory.json"),
+    memoryDisplayFile: path.join(stateRoot, "memory_display.json")
   };
 }
 
@@ -49,4 +51,3 @@ export async function listJsonFiles<T>(dirPath: string): Promise<T[]> {
     return [];
   }
 }
-

@@ -7,10 +7,24 @@ import type {
   ProviderPreset,
   ProviderTestResult,
   SessionSnapshot,
+  TrainingCard,
   UiResponse
 } from "./types";
 
 const GATEWAY_URL = process.env.NEXT_PUBLIC_GATEWAY_URL || "http://127.0.0.1:8787";
+
+async function readError(response: Response): Promise<string> {
+  const text = await response.text();
+  if (!text) return `${response.status} ${response.statusText}`;
+  try {
+    const parsed = JSON.parse(text);
+    if (typeof parsed?.error === "string") return parsed.error;
+    if (parsed?.error) return JSON.stringify(parsed.error);
+  } catch {
+    // Keep the original server text when it is not JSON.
+  }
+  return text;
+}
 
 async function post<T>(path: string, body: unknown): Promise<T> {
   const response = await fetch(`${GATEWAY_URL}${path}`, {
@@ -18,13 +32,13 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body)
   });
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) throw new Error(await readError(response));
   return response.json() as Promise<T>;
 }
 
 async function get<T>(path: string): Promise<T> {
   const response = await fetch(`${GATEWAY_URL}${path}`);
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) throw new Error(await readError(response));
   return response.json() as Promise<T>;
 }
 
@@ -84,8 +98,32 @@ export function deleteHistoryCard(id: string) {
   return del<{ deleted: boolean; id: string; removed_paths: string[] }>(`/history/${id}`);
 }
 
+export function updateHistoryCard(id: string, patch: Partial<Pick<TrainingCard, "date" | "date_label" | "timezone" | "location" | "duration" | "theme">>) {
+  return put<TrainingCard>(`/history/${id}`, patch);
+}
+
 export function getMemory() {
   return get("/memory");
+}
+
+export function refreshMemory(reason = "manual") {
+  return post("/memory/refresh", { reason });
+}
+
+export function refreshMemoryOnLeave(reason = "page_leave") {
+  const body = JSON.stringify({ reason });
+  if (typeof navigator !== "undefined" && typeof navigator.sendBeacon === "function") {
+    const sent = navigator.sendBeacon(`${GATEWAY_URL}/memory/refresh`, new Blob([body], { type: "text/plain;charset=UTF-8" }));
+    if (sent) return;
+  }
+  if (typeof fetch !== "undefined") {
+    fetch(`${GATEWAY_URL}/memory/refresh`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body,
+      keepalive: true
+    }).catch(() => undefined);
+  }
 }
 
 export function confirmMemory(id: string) {
@@ -138,12 +176,12 @@ async function put<T>(path: string, body: unknown): Promise<T> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body)
   });
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) throw new Error(await readError(response));
   return response.json() as Promise<T>;
 }
 
 async function del<T>(path: string): Promise<T> {
   const response = await fetch(`${GATEWAY_URL}${path}`, { method: "DELETE" });
-  if (!response.ok) throw new Error(await response.text());
+  if (!response.ok) throw new Error(await readError(response));
   return response.json() as Promise<T>;
 }

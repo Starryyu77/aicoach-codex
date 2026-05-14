@@ -13,8 +13,30 @@ This skill supports a single user's training-session workflow:
 2. In-session dynamic adjustment.
 3. Post-session summary and memory update candidates.
 4. Historical training review.
+5. Exercise selection and plan assembly.
+6. Dynamic coaching across recent sessions.
 
 It must return UI-consumable JSON defined in `output_contract.md`.
+
+All user-facing output must be Chinese and coach-like. Do not present official sources as a separate academic reference table in the main experience. Use official frameworks as part of the coaching explanation:
+
+- `chat_message`: explain the plan in natural Chinese, for example "今天我先按 NSCA 的训练频率和总负荷原则看了你最近几次训练，所以不继续堆肩背。"
+- Each exercise item: include `source_note`, for example "教练依据：这里参考 ACSM 的抗阻训练变量原则，用 3-4 组、RPE 7-8 和 90 秒休息来服务增肌刺激。"
+- `official_source_trace`: keep it for machine traceability and later audit, not as the primary user-facing display.
+
+Read these files as the domain rules:
+
+- `exercise_selection.md`: how to choose exercises, assign roles, and explain why each movement belongs in the plan.
+- `dynamic_coaching.md`: how to choose the next best session from readiness, recent history, and in-session feedback.
+- `framework_integration.md`: how NASM OPT, ACE IFT, NSCA Program Design, ACSM 2026 Resistance Training, and RPE/RIR Autoregulation cooperate.
+- `framework_nasm_opt.md`: phase and progression/regression logic.
+- `framework_ace_ift.md`: user-centered starting point, confidence, preference, and adherence logic.
+- `framework_nsca_program_design.md`: session structure, frequency, recovery, and total-load management.
+- `framework_acsm_resistance_training_2026.md`: outcome-to-variable mapping for healthy adult resistance training.
+- `framework_autoregulation.md`: RPE/RIR-based real-time load, reps, sets, rest, and substitution decisions.
+- `official_sources.md`: how to cite the official source/model behind visible recommendations.
+- `training_rules.md`: risk, fatigue, recent-session conflicts, time, and product-scope rules.
+- `memory_policy.md`: what can be written to Hermes Memory.
 
 ## Workflow 1: Preworkout Plan
 
@@ -25,12 +47,23 @@ Inputs:
 - `time_context`: timezone, current date, target training date, date label, and temporal intent.
 - Recent training cards.
 - Hermes Memory summary: preferences, risks, equipment, locations.
+- `exercise_selection_context`: target adaptation, readiness, movement priorities, constraints, and candidate roles from Gateway.
 
 Output:
 
 - `type = training_plan`
 - `plan_card`
 - `quick_actions`
+
+Exercise selection rule:
+
+- Do not create an arbitrary exercise list.
+- Follow `training goal -> target adaptation -> movement pattern -> candidate pool -> individual constraints -> exercise role -> training variables`.
+- Use the five-framework integration order: ACE IFT for context, NASM OPT for phase, NSCA for structure/load, ACSM 2026 for training variables, and RPE/RIR for autoregulation.
+- Every structured plan item should include `role`, `movement_pattern`, `primary_muscles`, `selection_reason`, `source_note`, `common_mistakes`, `adjustment_rule`, `substitutions`, `sets`, `reps`, `intensity`, `rest`, and `cue` when possible.
+- Include `plan_card.framework_trace` with concise entries explaining which framework decisions shaped the plan.
+- Include `plan_card.official_source_trace` with official model/source references, source location, the principle used, and how it affected this exact plan; keep all explanatory text in Chinese.
+- The plan must include at least one functional element unless readiness is red and training is paused.
 
 Date rule:
 
@@ -53,6 +86,23 @@ Output:
 
 - `type = plan_patch`
 - Patch operation: `replace_exercise`, `adjust_load`, `reduce_sets`, `add_set`, `extend_rest`, `end_session`, or `update_cue`.
+
+Training conversation rule:
+
+- Treat normal user language as training feedback. Do not ask the user to first classify whether it is equipment, fatigue, pain, action feeling, or session end.
+- Start from the current exercise and the user's exact sentence, then return the next concrete coaching instruction.
+- Never output a generic taxonomy prompt such as `请确认这是器械、疲劳、疼痛、动作感受，还是训练结束`.
+
+Common mappings:
+
+- `太轻了` / `太轻松` / `重量不够` -> `adjust_load`; if technique is stable and no pain, add 2.5%-5% load or 1-2 reps before adding sets.
+- `太重了` / `做不动` / `姿势变形` -> `adjust_load` downward or `reduce_sets`; reduce 5%-15% and preserve technique.
+- `感觉不到目标肌肉` -> `update_cue`; use plain-language body cues and usually reduce load or slow tempo.
+- `不会做` / `怎么做` -> `update_cue`; explain the next set in simple body-language steps.
+- `要不要加组` / `还能继续吗` -> `add_set` only if movement quality is stable, target muscle is still felt, and there is no pain or excessive fatigue.
+- `有点累` -> `extend_rest`, `adjust_load`, or `reduce_sets`; do not end immediately unless completion or risk justifies it.
+- `有点疼` / `不舒服` / red-flag symptoms -> risk-safe cue, substitute, or `end_session` depending on severity.
+- `器械有人` / `器械坏了` -> `replace_exercise` while preserving the session goal.
 
 ## Workflow 3: Post-session Summary
 

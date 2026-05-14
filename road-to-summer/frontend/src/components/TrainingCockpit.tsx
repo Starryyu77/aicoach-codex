@@ -2,7 +2,8 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { assessMovement, endSession, getCurrentSession, sendChat, startSession } from "../lib/api";
-import type { PlanCard, PlanItem, SessionSnapshot } from "../lib/types";
+import type { AgentUiDocument, PlanCard, PlanItem, SessionSnapshot } from "../lib/types";
+import { AgentUiRenderer } from "./AgentUiRenderer";
 import { CameraInputButton } from "./CameraInputButton";
 import { ChatPanel } from "./ChatPanel";
 import { CurrentExerciseCard } from "./CurrentExerciseCard";
@@ -11,6 +12,7 @@ import { QuickActionBar } from "./QuickActionBar";
 import { VoiceInputButton } from "./VoiceInputButton";
 
 const DEFAULT_ACTIONS = [
+  "开始训练",
   "完成本组",
   "太轻了",
   "太重了",
@@ -64,6 +66,17 @@ function isPlanItem(item: PlanItem | string): item is PlanItem {
   return typeof item === "object" && item !== null && "exercise" in item;
 }
 
+function friendlyErrorMessage(error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  if (/timed out|timeout|aborted/i.test(message)) {
+    return [
+      "这次生成等得太久，我先保留当前训练状态。",
+      "你可以稍后重试，或者先按当前计划继续训练。"
+    ].join("");
+  }
+  return `请求失败：${message}`;
+}
+
 export function TrainingCockpit() {
   const [plan, setPlan] = useState<PlanCard | undefined>();
   const [currentExercise, setCurrentExercise] = useState("");
@@ -72,6 +85,7 @@ export function TrainingCockpit() {
   const [riskNote, setRiskNote] = useState("肩前侧偶尔紧：上肢动作前先热身，疼痛时停止相关动作。");
   const [isBusy, setBusy] = useState(false);
   const [session, setSession] = useState<SessionSnapshot | undefined>();
+  const [agentUi, setAgentUi] = useState<AgentUiDocument | undefined>();
   const [statusText, setStatusText] = useState("未开始：先确认今天状态，再手动生成计划。");
   const [timezone, setTimezone] = useState(DEFAULT_TIMEZONE);
   const [targetDate, setTargetDate] = useState(() => todayInTimezone(DEFAULT_TIMEZONE));
@@ -115,11 +129,13 @@ export function TrainingCockpit() {
     try {
       if (text === "结束训练") {
         const response = await endSession({ targetDate, timezone });
+        if (response.ui.agent_ui) setAgentUi(response.ui.agent_ui);
         setMessages((items) => [...items, { role: "agent", text: response.ui.chat_message }]);
         return;
       }
       const response = await sendChat(text, source, { targetDate, timezone });
       if (response.ui.current_plan) setPlan(response.ui.current_plan);
+      if (response.ui.agent_ui) setAgentUi(response.ui.agent_ui);
       if (response.ui.current_session) {
         mergeSession(response.ui.current_session);
         if (response.ui.current_session.current_exercise) setCurrentExercise(response.ui.current_session.current_exercise);
@@ -129,17 +145,28 @@ export function TrainingCockpit() {
       if (response.ui.quick_actions) setQuickActions(response.ui.quick_actions);
       if (response.ui.memory_updates?.length) setRiskNote("有新的 Memory 更新候选，需用户确认后写入 Hermes Memory。");
       setMessages((items) => [...items, { role: "agent", text: response.ui.chat_message }]);
+    } catch (error) {
+      const message = friendlyErrorMessage(error);
+      setStatusText(message);
+      setMessages((items) => [...items, { role: "agent", text: message }]);
     } finally {
       setBusy(false);
     }
   }
 
   async function initialize() {
-    const started = await startSession({ targetDate, timezone });
-    mergeSession(started as SessionSnapshot);
-    const label = dateLabel(targetDate, todayInTimezone(timezone));
-    setStatusText(`训练 session 已开始，正在请求 Hermes 生成 ${label}（${targetDate}）的计划。`);
-    await submit(`请按 ${targetDate} 生成训练计划。`);
+    try {
+      const started = await startSession({ targetDate, timezone });
+      mergeSession(started as SessionSnapshot);
+      const label = dateLabel(targetDate, todayInTimezone(timezone));
+      setStatusText(`训练 session 已开始，正在请求 Hermes 生成 ${label}（${targetDate}）的计划。`);
+      await submit(`请按 ${targetDate} 生成训练计划。`);
+    } catch (error) {
+      const message = friendlyErrorMessage(error);
+      setStatusText(message);
+      setMessages((items) => [...items, { role: "agent", text: message }]);
+      setBusy(false);
+    }
   }
 
   async function runCamera() {
@@ -149,15 +176,23 @@ export function TrainingCockpit() {
     }
     setBusy(true);
     const targetExercise = currentExercise || currentItem?.exercise || "高位下拉";
-    const response = await assessMovement(targetExercise);
-    setMessages((items) => [
-      ...items,
-      { role: "user", text: `摄像头检查：${targetExercise}` },
-      { role: "agent", text: response.ui.chat_message }
-    ]);
-    if (response.ui.current_plan) setPlan(response.ui.current_plan);
-    if (response.ui.current_session?.current_exercise) setCurrentExercise(response.ui.current_session.current_exercise);
-    setBusy(false);
+    try {
+      const response = await assessMovement(targetExercise);
+      if (response.ui.agent_ui) setAgentUi(response.ui.agent_ui);
+      setMessages((items) => [
+        ...items,
+        { role: "user", text: `摄像头检查：${targetExercise}` },
+        { role: "agent", text: response.ui.chat_message }
+      ]);
+      if (response.ui.current_plan) setPlan(response.ui.current_plan);
+      if (response.ui.current_session?.current_exercise) setCurrentExercise(response.ui.current_session.current_exercise);
+    } catch (error) {
+      const message = friendlyErrorMessage(error);
+      setStatusText(message);
+      setMessages((items) => [...items, { role: "agent", text: message }]);
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -241,11 +276,12 @@ export function TrainingCockpit() {
 
         <div className="grid gap-4">
           <CurrentPlanCard plan={plan} storagePath={session?.storage?.current_plan} />
-          <CurrentExerciseCard item={currentItem} />
+          <CurrentExerciseCard item={currentItem} session={session} onAction={(action) => submit(action, "quick_action")} />
         </div>
 
         <div className="grid gap-4">
           <ChatPanel messages={messages} onSubmit={(text) => submit(text)} isBusy={isBusy} />
+          <AgentUiRenderer document={agentUi} onAction={(action) => submit(action, "quick_action")} />
           <div className="rounded-lg bg-white p-4 shadow-sm">
             <div className="grid gap-3 sm:grid-cols-2">
               <VoiceInputButton onTranscript={(text) => submit(text, "voice")} />

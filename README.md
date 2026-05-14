@@ -2,14 +2,144 @@
 
 本仓库当前先实现「运动健身 AI Agent / Skill / Workflow」的本地 Codex 原型，不做完整 App、教练工作台、SaaS 后台、CRM、排课、支付或会员系统。
 
-## 运行
+## Quick Start
+
+适合外部开发者第一次把项目跑起来。`/chat` 默认要求真实 Hermes Provider；不会用本地 Mock Hermes 冒充模型回复。
+
+### 0. 环境要求
+
+```bash
+node --version
+npm --version
+```
+
+要求：
+
+```text
+Node >= 25
+npm >= 11
+```
+
+原因：Gateway 和测试直接运行部分 TypeScript 文件，需要当前 Node 的类型擦除能力。
+
+### 1. 安装依赖
+
+```bash
+npm install
+npm install --prefix road-to-summer/frontend
+```
+
+### 2. 先验证 CLI
+
+```bash
+npm run cli -- --help
+npm run cli -- examples
+npm run cli -- doctor
+npm run cli -- "今天该练什么？"
+```
+
+### 3. 启动 Gateway
+
+打开第一个终端：
+
+```bash
+npm run gateway
+```
+
+成功时会看到：
+
+```text
+Road to Summer Gateway listening on http://127.0.0.1:8787
+```
+
+如果 `8787` 已被占用，Gateway 会提示如何检查已有服务，以及如何换端口启动：
+
+```bash
+GATEWAY_PORT=8788 npm run gateway
+```
+
+### 4. 启动前端
+
+打开第二个终端：
+
+```bash
+npm run dev --prefix road-to-summer/frontend
+```
+
+打开 Next.js 打印的地址，通常是：
+
+```text
+http://localhost:3000/training
+```
+
+如果 `3000` 被占用，Next.js 会自动给出新的端口。按终端里打印的 URL 打开。
+
+### 5. 跑一键 DX smoke
+
+打开第三个终端：
+
+```bash
+npm run dx:smoke
+```
+
+它会检查：
+
+- Node 版本。
+- Gateway 是否能访问。
+- Frontend `/training` 是否能访问。
+- Provider 配置是否能读取，且不会把明文 API key 暴露到前端。
+- Real `/chat` 是否能通过 active Hermes Provider 返回结构化 JSON。
+- Mock `/chat` 是否能生成结构化 `training_plan`。
+
+如果前端不是 `http://localhost:3000/training`，可以指定：
+
+```bash
+FRONTEND_URL=http://localhost:3001/training npm run dx:smoke
+```
+
+如果 Gateway 改了端口，可以指定：
+
+```bash
+GATEWAY_URL=http://127.0.0.1:8788 npm run dx:smoke
+```
+
+### 6. 可选：切到真实 Hermes / ASR
+
+打开：
+
+```text
+http://localhost:3000/settings
+```
+
+在 Settings 里配置：
+
+- Hermes Runtime Model，例如 MiniMax CN。
+- Hermes Provider，例如 Local Hermes API Server。
+- ASR Provider，例如 Doubao ASR Flash。
+- Vision Provider，第一版可以保持 mock。
+
+API key 只提交给 Gateway，写入 `.runtime/secrets.env` 或环境变量。前端只显示 `hasApiKey`，不展示明文 key。
+
+真实 Hermes 启动说明见：
+
+```text
+road-to-summer/docs/hermes_setup.md
+```
+
+## 常用命令
 
 ```bash
 npm test
+npm run dx:smoke
+npm run cli -- --help
+npm run cli -- examples
+npm run cli -- doctor
 npm run cli -- "今天该练什么？"
 npm run cli -- "高位下拉和绳索划船有人了。"
 npm run cli -- "我感觉不到背阔肌发力。"
 npm run gateway
+npm run dev --prefix road-to-summer/frontend
+npm run build --prefix road-to-summer/frontend
 ```
 
 ## 当前能力
@@ -45,7 +175,7 @@ road-to-summer/
 - Road to Summer Hermes Skill Pack 文档和输出契约。
 - Gateway Provider 架构：Hermes / ASR / Vision 都可配置 active provider。
 - Provider presets：Settings 页面提供常见 Hermes、OpenAI Whisper、Groq Whisper、Doubao ASR、External Pose HTTP 快速配置模板。
-- Hermes providers：mock、Hermes API Server、OpenAI-compatible Hermes。
+- Hermes providers：Hermes API Server、OpenAI-compatible Hermes；训练 `/chat` 不允许使用 Mock Hermes。
 - ASR providers：mock、OpenAI Whisper、Groq Whisper、Local Whisper、Doubao ASR Flash。
 - Vision providers：mock、External Pose HTTP。
 - 轻量文件状态：`current_session.json`、`current_plan.json`、`training_cards/*.json`、`mock_memory.json`。
@@ -53,11 +183,11 @@ road-to-summer/
 - 浏览器录音 -> `/voice/transcribe` -> 用户确认 -> `/chat`。
 - Gateway 场景测试和 Provider 测试。
 
-当前 mock：
+当前真实 / mock 边界：
 
-- 默认 active Hermes provider 仍是 mock，真实 Hermes 可通过 Settings 或 `.runtime/config.json` 切换。
-- 默认 active ASR provider 仍是 mock，OpenAI Whisper 已有真实 HTTP 实现。
-- Vision / Pose provider。
+- 默认 active Hermes provider 是 `local-hermes`；如果真实 Hermes 不可用，`/chat` 返回错误，不生成本地模板回复。
+- 默认 active ASR provider 可为 mock 或真实 Doubao/OpenAI/Groq/Local Whisper，按 Settings 或 `.runtime/config.json` 切换。
+- Vision / Pose provider 仍可使用 mock；动作评估后的教练回复仍通过真实 Hermes 生成。
 - Doubao ASR 已按火山引擎大模型录音文件极速版接口接入；新版控制台填单个 API Key，旧版可填 `appKey:accessKey`。
 
 Gateway API:

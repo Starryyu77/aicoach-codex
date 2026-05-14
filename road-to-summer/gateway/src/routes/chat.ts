@@ -1,10 +1,11 @@
 import { buildHermesMessage } from "../hermes/buildHermesMessage.ts";
 import { parseHermesResponse } from "../hermes/parseHermesResponse.ts";
-import type { InputSource } from "../hermes/types.ts";
+import type { HermesMessage, HermesOutput, InputSource } from "../hermes/types.ts";
 import { mapAgentOutputToUi } from "../ui/mapAgentOutputToUi.ts";
+import { buildAgentUiDocument, validateAgentUiDocument } from "../ui/agentUi.ts";
 import { getCurrentPlan, getCurrentSession, saveCurrentPlan, saveCurrentSession } from "../storage/currentSessionStore.ts";
 import { listTrainingCards, saveTrainingCard } from "../storage/trainingCardStore.ts";
-import { addPendingMemoryUpdates, getMockMemory } from "../storage/memoryStore.ts";
+import { addPendingMemoryUpdates, getMockMemory, preferenceMemoryUpdatesFromText } from "../storage/memoryStore.ts";
 import { buildTimeContext, type TimeContext } from "../time/timeContext.ts";
 import type { GatewayContext } from "./types.ts";
 
@@ -24,11 +25,20 @@ function expectedOutputType(rawText: string, timeContext: TimeContext): "trainin
   if (/练完|训练结束|总结/.test(rawText)) return "training_card";
   if (
     timeContext.temporal_intent === "future_planning" ||
-    /该练什么|训练计划|帮我安排|安排.*训练|练什么/.test(rawText)
+    /该练什么|训练计划|帮我安排|安排.*训练|练什么|今天想练|想练(?:胸|背|腿|肩|下肢|上肢)|今天.*练(?:胸|背|腿|肩|下肢|上肢)/.test(rawText)
   ) {
     return "training_plan";
   }
   return "plan_patch";
+}
+
+async function getHermesOutput(context: GatewayContext, message: HermesMessage): Promise<{ output: HermesOutput }> {
+  const hermesProvider = await context.providerRegistry.getHermesProvider();
+  if (hermesProvider.instance.type === "mock") {
+    throw new Error("Active Hermes provider is mock. Configure a real Hermes provider before using /chat.");
+  }
+  const hermes = await hermesProvider.sendMessage(message);
+  return { output: parseHermesResponse(hermes) };
 }
 
 export async function handleChat(context: GatewayContext, request: ChatRequest) {
@@ -59,9 +69,7 @@ export async function handleChat(context: GatewayContext, request: ChatRequest) 
     timeContext,
     expectedType: expectedOutputType(rawText, timeContext)
   });
-  const hermesProvider = await context.providerRegistry.getHermesProvider();
-  const hermes = await hermesProvider.sendMessage(message);
-  const output = parseHermesResponse(hermes);
+  const { output } = await getHermesOutput(context, message);
   if (output.type === "training_plan") {
     output.plan_card = {
       ...output.plan_card,
@@ -80,12 +88,20 @@ export async function handleChat(context: GatewayContext, request: ChatRequest) 
     };
   }
   const ui = mapAgentOutputToUi(output, sessionWithTime, currentPlan);
+  ui.agent_ui = buildAgentUiDocument(output, ui);
+  const agentUiValidation = validateAgentUiDocument(ui.agent_ui);
+  if (!agentUiValidation.valid) {
+    throw new Error(`Invalid agent_ui: ${agentUiValidation.error}`);
+  }
   if (ui.current_session) await saveCurrentSession(ui.current_session, context.stateRoot);
   if (ui.current_plan) await saveCurrentPlan(ui.current_plan, context.stateRoot);
   if (output.type === "training_card") {
     ui.training_card = await saveTrainingCard(output.training_card, context.stateRoot);
   }
-  const updates = "memory_updates" in output ? output.memory_updates || [] : [];
+  const updates = [
+    ...("memory_updates" in output ? output.memory_updates || [] : []),
+    ...preferenceMemoryUpdatesFromText(rawText, memory)
+  ];
   if (updates.length) await addPendingMemoryUpdates(updates, context.stateRoot);
   return {
     hermes_output: output,

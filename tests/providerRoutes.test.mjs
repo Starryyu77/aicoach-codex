@@ -24,7 +24,7 @@ async function context() {
 test("provider route handlers expose config, create instance, test, and set active", async () => {
   const ctx = await context();
   const initial = await handleProvidersGet(ctx);
-  assert.equal(initial.providers.hermes.active, "mock-hermes");
+  assert.equal(initial.providers.hermes.active, "local-hermes");
   const presets = await handleProviderPresetsGet();
   assert.ok(presets.presets.asr.some((preset) => preset.id === "doubao-asr-flash"));
 

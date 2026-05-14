@@ -12,12 +12,13 @@ async function registry() {
   return new ProviderRegistry(store);
 }
 
-test("provider registry returns active mock providers by default", async () => {
+test("provider registry uses real Hermes and mock peripheral providers by default", async () => {
   const providers = await registry();
   const hermes = await providers.getHermesProvider();
   const asr = await providers.getAsrProvider();
   const vision = await providers.getVisionProvider();
-  assert.equal(hermes.instance.id, "mock-hermes");
+  assert.equal(hermes.instance.id, "local-hermes");
+  assert.equal(hermes.instance.type, "hermes-api-server");
   assert.equal(asr.instance.id, "mock-asr");
   assert.equal(vision.instance.id, "mock-vision");
 });

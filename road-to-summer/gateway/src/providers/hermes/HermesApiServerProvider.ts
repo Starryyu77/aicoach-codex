@@ -6,8 +6,29 @@ type HermesProviderOptions = {
   runtimeRoot?: string;
 };
 
-function timeoutSignal(timeoutMs = 30000) {
-  return AbortSignal.timeout(timeoutMs);
+const DEFAULT_HERMES_REQUEST_TIMEOUT_MS = 420000;
+
+function effectiveTimeoutMs(timeoutMs?: number, fallback = DEFAULT_HERMES_REQUEST_TIMEOUT_MS) {
+  return Number.isFinite(timeoutMs) && Number(timeoutMs) > 0 ? Number(timeoutMs) : fallback;
+}
+
+function timeoutSignal(timeoutMs?: number, fallback = DEFAULT_HERMES_REQUEST_TIMEOUT_MS) {
+  return AbortSignal.timeout(effectiveTimeoutMs(timeoutMs, fallback));
+}
+
+function isTimeoutError(error: unknown) {
+  if (!(error instanceof Error)) return false;
+  return /abort|timeout|timed out/i.test(`${error.name} ${error.message}`);
+}
+
+function normalizeHermesRequestError(error: unknown, timeoutMs?: number): never {
+  if (isTimeoutError(error)) {
+    throw new Error(
+      `Hermes request timed out after ${Math.round(effectiveTimeoutMs(timeoutMs) / 1000)}s. ` +
+        "The real Hermes/MiniMax route can be slow; increase this provider's timeoutMs in Settings or retry with a narrower prompt."
+    );
+  }
+  throw error;
 }
 
 function messageToPrompt(input: HermesMessage) {
@@ -71,7 +92,19 @@ export class HermesApiServerProvider implements HermesProvider {
         messages: [
           {
             role: "system",
-            content: "Use Road to Summer Skill Pack. Output only valid JSON: training_plan, plan_patch, training_card, or training_review."
+            content: [
+              "Use Road to Summer Skill Pack.",
+              "All user-facing text must be Chinese, coach-like, and directly useful during training.",
+              "For training_plan, do not invent a random exercise list; use exercise_selection_context and the chain target -> adaptation -> movement pattern -> candidate pool -> constraints -> role -> variables.",
+              "Apply the five-framework bridge: ACE IFT for user context, NASM OPT for phase, NSCA Program Design for structure/load, ACSM 2026 Resistance Training for variables, and RPE/RIR Autoregulation for live adjustment.",
+              "Include plan_card.framework_trace with concise framework decisions when returning a training_plan.",
+              "Include plan_card.official_source_trace with official source URL, source location, principle, applied decision, and why it matters for machine traceability, but do not make it a standalone user-facing reference table.",
+              "Every structured PlanItem should include role, movement_pattern, primary_muscles, selection_reason, source_note, common_mistakes, adjustment_rule, substitutions, sets, reps, intensity, rest, and cue when possible.",
+              "source_note must be a short Chinese coach explanation such as: 教练依据：这里参考 NSCA 的训练结构原则，把这个动作放在主训练后补足动作模式。",
+              "For in-session plan_patch, understand ordinary natural Chinese feedback directly. Do not ask the user to classify the feedback. Map examples: 太轻了 -> adjust_load upward; 太重了 -> adjust_load downward; 感觉不到目标肌肉 -> update_cue; 不会做 -> update_cue with plain-language execution steps; 要不要加组 -> add_set only if quality/risk allow; 有点累 -> extend_rest or reduce load; 有点疼 or 不舒服 -> risk-safe guidance; 器械有人 or 坏了 -> replace_exercise.",
+              "Never output the generic sentence 请确认这是器械、疲劳、疼痛、动作感受，还是训练结束. Give the next concrete coaching instruction instead.",
+              "Output only valid JSON: training_plan, plan_patch, training_card, or training_review."
+            ].join(" ")
           },
           {
             role: "user",
@@ -82,7 +115,7 @@ export class HermesApiServerProvider implements HermesProvider {
         stream: false
       }),
       signal: timeoutSignal(this.instance.timeoutMs)
-    });
+    }).catch((error) => normalizeHermesRequestError(error, this.instance.timeoutMs));
 
     const data = await response.json().catch(async () => ({ text: await response.text() }));
     if (!response.ok) {
@@ -111,7 +144,7 @@ export class HermesApiServerProvider implements HermesProvider {
           accept: "application/json",
           ...buildAuthHeaders(apiKey)
         },
-        signal: timeoutSignal(this.instance.timeoutMs || 8000)
+        signal: timeoutSignal(this.instance.timeoutMs, 8000)
       });
       const details = await response.json().catch(async () => ({ text: await response.text() }));
       if (!response.ok) throw new Error(`Hermes capability check failed ${response.status}: ${JSON.stringify(details)}`);
@@ -130,7 +163,7 @@ export class HermesApiServerProvider implements HermesProvider {
             accept: "application/json",
             ...buildAuthHeaders(apiKey)
           },
-          signal: timeoutSignal(this.instance.timeoutMs || 8000)
+          signal: timeoutSignal(this.instance.timeoutMs, 8000)
         });
         const details = await response.json().catch(async () => ({ text: await response.text() }));
         if (!response.ok) throw new Error(`Hermes models check failed ${response.status}: ${JSON.stringify(details)}`);

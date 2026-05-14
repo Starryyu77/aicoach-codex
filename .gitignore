@@ -13,3 +13,4 @@ coverage/
 
 coach-vault/runs/*.jsonl
 .playwright-cli/
+.gstack/

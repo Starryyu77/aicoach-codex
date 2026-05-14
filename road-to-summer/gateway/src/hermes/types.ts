@@ -50,6 +50,7 @@ export type HermesMessage = {
   current_session: CurrentSession;
   recent_training_cards?: TrainingCard[];
   memory_summary?: Record<string, unknown>;
+  exercise_selection_context?: Record<string, unknown>;
   movement_assessment?: MovementAssessment;
   instruction: string;
 };
@@ -59,10 +60,22 @@ export type MemoryUpdate = {
   content: string;
   reason: string;
   requires_confirmation: boolean;
+  category?: "preference" | "equipment" | "location" | "risk" | "observation" | "training";
+  operation?: "add" | "remove" | "replace";
+  key?: string;
+  value?: string;
+  remove_values?: string[];
 };
 
 export type PlanItem = {
   exercise: string;
+  role?: string;
+  movement_pattern?: string;
+  primary_muscles?: string[];
+  selection_reason?: string;
+  source_note?: string;
+  common_mistakes?: string[];
+  adjustment_rule?: string;
   sets: string;
   reps: string;
   intensity: string;
@@ -86,6 +99,22 @@ export type PlanCard = {
   sections: PlanSection[];
   risk_notes: string[];
   reasoning: string;
+  framework_trace?: string[];
+  official_source_trace?: OfficialSourceTrace[];
+  decision_basis?: string[];
+  recent_training_summary?: string[];
+  quality_warnings?: string[];
+};
+
+export type OfficialSourceTrace = {
+  framework: string;
+  model: string;
+  official_source: string;
+  source_url: string;
+  source_location: string;
+  principle: string;
+  applied_decision: string;
+  why_it_matters: string;
 };
 
 export type TrainingPlanOutput = {
@@ -108,6 +137,7 @@ export type PlanPatchOutput = {
   };
   quick_actions: string[];
   memory_updates?: MemoryUpdate[];
+  session_update?: Partial<CurrentSession>;
 };
 
 export type TrainingCard = {

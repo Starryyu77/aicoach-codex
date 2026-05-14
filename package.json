@@ -5,10 +5,11 @@
   "type": "module",
   "scripts": {
     "cli": "node src/cli.mjs",
+    "dx:smoke": "node scripts/dx-smoke.mjs",
     "gateway": "node road-to-summer/gateway/src/server.ts",
     "test": "node --test tests/*.test.mjs"
   },
   "engines": {
-    "node": ">=20"
+    "node": ">=25"
   }
 }

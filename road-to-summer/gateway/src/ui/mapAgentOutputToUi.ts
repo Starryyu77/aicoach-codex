@@ -1,4 +1,5 @@
 import type { CurrentSession, HermesOutput, PlanCard, PlanItem, PlanPatchOutput, TrainingCard } from "../hermes/types.ts";
+import type { AgentUiDocument } from "./agentUi.ts";
 
 export type UiStatePatch = {
   current_session?: CurrentSession;
@@ -7,6 +8,7 @@ export type UiStatePatch = {
   quick_actions?: string[];
   training_card?: TrainingCard;
   memory_updates?: unknown[];
+  agent_ui?: AgentUiDocument;
 };
 
 function isPlanItem(item: PlanItem | string): item is PlanItem {
@@ -95,6 +97,7 @@ function applyPlanPatch(plan: PlanCard | undefined, patch: PlanPatchOutput["patc
 }
 
 function nextExerciseFromPatch(output: PlanPatchOutput, currentSession: CurrentSession): string | undefined {
+  if (output.session_update?.current_exercise) return output.session_update.current_exercise;
   if (output.patch.operation === "replace_exercise" && output.patch.to) return output.patch.to;
   return output.patch.target_exercise || currentSession.current_exercise;
 }
@@ -131,8 +134,9 @@ export function mapAgentOutputToUi(output: HermesOutput, currentSession: Current
       current_plan: patchedPlan,
       current_session: {
         ...currentSession,
+        ...(output.session_update || {}),
         current_exercise: nextExerciseFromPatch(output, currentSession),
-        plan_card: patchedPlan || currentSession.plan_card,
+        plan_card: patchedPlan || output.session_update?.plan_card || currentSession.plan_card,
         events: [...(currentSession.events || []), output.patch]
       }
     };

@@ -61,6 +61,72 @@ test("Hermes API Server provider sends OpenAI-compatible chat completion request
   }
 });
 
+test("parseHermesResponse wraps Hermes shorthand patch without local coach fallback", () => {
+  const output = parseHermesResponse({
+    provider: "hermes",
+    raw: {},
+    output: JSON.stringify({
+      operation: "adjust_load",
+      target_exercise: "全身活动度循环",
+      from: "RPE 3-4",
+      to: "增加 1-2 次",
+      reason: "用户反馈太轻。",
+      next_instruction: "下一组保持动作质量，增加 1-2 次。"
+    })
+  });
+  assert.equal(output.type, "plan_patch");
+  assert.equal(output.chat_message, "下一组保持动作质量，增加 1-2 次。");
+  assert.equal(output.patch.operation, "adjust_load");
+  assert.equal(output.patch.target_exercise, "全身活动度循环");
+});
+
+test("parseHermesResponse wraps nested Hermes plan_patch object", () => {
+  const output = parseHermesResponse({
+    provider: "hermes",
+    raw: {},
+    output: JSON.stringify({
+      plan_patch: {
+        operation: "adjust_load",
+        target_exercise: "全身活动度循环",
+        from: "RPE 3-4",
+        to: "RPE 4-5",
+        reason: "真实 Hermes 返回了嵌套 plan_patch。",
+        next_instruction: "下一组增加每项动作 2 次。",
+        session_update: {
+          current_exercise: "全身活动度循环",
+          current_set: 2
+        }
+      },
+      training_card: {
+        phase: "in_session"
+      }
+    })
+  });
+  assert.equal(output.type, "plan_patch");
+  assert.equal(output.patch.to, "RPE 4-5");
+  assert.equal(output.session_update.current_exercise, "全身活动度循环");
+});
+
+test("parseHermesResponse unwraps common Hermes wrapper keys", () => {
+  const output = parseHermesResponse({
+    provider: "hermes",
+    raw: {},
+    output: JSON.stringify({
+      result: {
+        patch: {
+          operation: "update_cue",
+          target_exercise: "高位下拉",
+          reason: "真实 Hermes 返回了 wrapper.patch。",
+          next_instruction: "先沉肩，再用手肘向裤兜方向拉。"
+        }
+      }
+    })
+  });
+  assert.equal(output.type, "plan_patch");
+  assert.equal(output.patch.operation, "update_cue");
+  assert.equal(output.chat_message, "先沉肩，再用手肘向裤兜方向拉。");
+});
+
 test("Hermes API Server provider test uses capabilities endpoint", async () => {
   const originalFetch = globalThis.fetch;
   const calls = [];

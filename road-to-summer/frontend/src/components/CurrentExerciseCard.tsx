@@ -1,19 +1,31 @@
-import type { PlanItem } from "../lib/types";
+import type { PlanItem, SessionSnapshot } from "../lib/types";
 
-export function CurrentExerciseCard({ item }: { item?: PlanItem }) {
+type CurrentExerciseCardProps = {
+  item?: PlanItem;
+  session?: SessionSnapshot;
+  onAction?: (action: string) => void;
+};
+
+export function CurrentExerciseCard({ item, session, onAction }: CurrentExerciseCardProps) {
+  const canAct = Boolean(item && onAction);
+
   return (
     <section className="rounded-lg bg-white p-5 shadow-sm">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2 className="text-lg font-semibold">当前动作</h2>
           <p className="mt-1 text-2xl font-semibold">{item?.exercise || "等待计划"}</p>
+          {session?.progress ? <p className="mt-2 text-sm text-[#536158]">{session.progress}</p> : null}
         </div>
-        <div className="rounded-md bg-[#f4f7f2] px-3 py-2 text-sm">{item?.intensity || "RPE -"}</div>
+        <div className="grid gap-2 text-right">
+          <div className="rounded-md bg-[#f4f7f2] px-3 py-2 text-sm">{item?.intensity || "RPE -"}</div>
+          {session?.phase ? <div className="text-xs text-[#536158]">{session.phase}</div> : null}
+        </div>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-3">
         <div className="rounded-md bg-[#f4f7f2] p-3">
-          <div className="text-xs text-[#536158]">组数</div>
-          <div className="mt-1 font-medium">{item?.sets || "-"}</div>
+          <div className="text-xs text-[#536158]">当前组 / 总组</div>
+          <div className="mt-1 font-medium">{session?.current_set || 1} / {item?.sets || "-"}</div>
         </div>
         <div className="rounded-md bg-[#f4f7f2] p-3">
           <div className="text-xs text-[#536158]">次数</div>
@@ -31,7 +43,41 @@ export function CurrentExerciseCard({ item }: { item?: PlanItem }) {
       <div className="mt-3 text-sm text-[#536158]">
         替代动作：{item?.substitutions?.join(" / ") || "待生成"}
       </div>
+      {canAct ? (
+        <div className="mt-4 rounded-md border border-[#dfe6dc] bg-[#f7faf5] p-3">
+          <div className="text-xs font-medium text-[#536158]">当前动作操作</div>
+          <div className="mt-2 flex flex-wrap gap-2">
+            <button
+              className="rounded-md bg-[#195b46] px-3 py-2 text-sm font-medium text-white hover:bg-[#124735] disabled:opacity-50"
+              type="button"
+              onClick={() => onAction?.("完成本组")}
+            >
+              完成本组
+            </button>
+            <button
+              className="rounded-md border border-[#cfd9cf] bg-white px-3 py-2 text-sm hover:bg-[#eef4ec]"
+              type="button"
+              onClick={() => onAction?.("我感觉很好，没有任何酸痛")}
+            >
+              感觉很好，无酸痛
+            </button>
+            <button
+              className="rounded-md border border-[#cfd9cf] bg-white px-3 py-2 text-sm hover:bg-[#eef4ec]"
+              type="button"
+              onClick={() => onAction?.("有点累")}
+            >
+              有点累
+            </button>
+            <button
+              className="rounded-md border border-[#cfd9cf] bg-white px-3 py-2 text-sm hover:bg-[#eef4ec]"
+              type="button"
+              onClick={() => onAction?.("有点疼")}
+            >
+              有点疼
+            </button>
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
-
