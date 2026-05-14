@@ -6,6 +6,7 @@ import type {
   ProviderInstance,
   ProviderPreset,
   ProviderTestResult,
+  SessionSnapshot,
   UiResponse
 } from "./types";
 
@@ -27,8 +28,17 @@ async function get<T>(path: string): Promise<T> {
   return response.json() as Promise<T>;
 }
 
-export function sendChat(text: string, source: "text" | "quick_action" = "text") {
-  return post<UiResponse>("/chat", { text, source });
+export function sendChat(
+  text: string,
+  source: "text" | "voice" | "quick_action" = "text",
+  meta: { targetDate?: string; timezone?: string } = {}
+) {
+  return post<UiResponse>("/chat", {
+    text,
+    source,
+    target_date: meta.targetDate,
+    timezone: meta.timezone
+  });
 }
 
 export function transcribeVoice(audio: string, meta: { fileName?: string; mimeType?: string } = {}) {
@@ -47,16 +57,31 @@ export function assessMovement(exercise: string, media = "mock-frame") {
   });
 }
 
-export function startSession() {
-  return post("/session/start", { location: "公寓健身房" });
+export function startSession(meta: { targetDate?: string; timezone?: string } = {}) {
+  return post("/session/start", {
+    location: "公寓健身房",
+    target_date: meta.targetDate,
+    timezone: meta.timezone
+  });
 }
 
-export function endSession() {
-  return post<UiResponse>("/session/end", {});
+export function getCurrentSession() {
+  return get<SessionSnapshot>("/session/current");
+}
+
+export function endSession(meta: { targetDate?: string; timezone?: string } = {}) {
+  return post<UiResponse>("/session/end", {
+    target_date: meta.targetDate,
+    timezone: meta.timezone
+  });
 }
 
 export function getHistory() {
   return get("/history");
+}
+
+export function deleteHistoryCard(id: string) {
+  return del<{ deleted: boolean; id: string; removed_paths: string[] }>(`/history/${id}`);
 }
 
 export function getMemory() {

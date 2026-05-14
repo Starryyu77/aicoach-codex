@@ -1,10 +1,10 @@
 import type { ProviderCategory, ProviderConfig, ProviderInstance, PublicProviderConfig } from "./types.ts";
 import { loadConfig } from "../config/loadConfig.ts";
 import { saveConfig } from "../config/saveConfig.ts";
-import { getSecret, setSecret } from "../config/secrets.ts";
+import { getSecret, sanitizeSecretRef, setSecret } from "../config/secrets.ts";
 
 function sanitizeRef(ref?: string) {
-  return ref || "";
+  return sanitizeSecretRef(ref);
 }
 
 export class ProviderConfigStore {

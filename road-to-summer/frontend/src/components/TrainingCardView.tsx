@@ -1,35 +1,54 @@
 import type { TrainingCard } from "../lib/types";
+import { MarkdownBlock } from "./MarkdownBlock";
 
-export function TrainingCardView({ card }: { card: TrainingCard }) {
+function fallbackMarkdown(card: TrainingCard): string {
+  return [
+    `# ${card.theme || "训练记录"}`,
+    "",
+    `- 日期：${card.date || ""}`,
+    card.date_label ? `- 日期语义：${card.date_label}` : "",
+    card.timezone ? `- 时区：${card.timezone}` : "",
+    `- 场地：${card.location || ""}`,
+    `- 时长：${card.duration || "未记录"}`,
+    "",
+    "## 原计划",
+    JSON.stringify(card.planned || [], null, 2),
+    "",
+    "## 实际完成",
+    JSON.stringify(card.actual_completed || [], null, 2),
+    "",
+    "## 临时调整",
+    JSON.stringify(card.adjustments || [], null, 2),
+    "",
+    "## 身体反馈",
+    (card.body_feedback || []).map((item) => `- ${String(item)}`).join("\n") || "- 无",
+    "",
+    "## 下次建议",
+    (card.next_session_suggestions || []).map((item) => `- ${item}`).join("\n") || "- 无"
+  ].join("\n");
+}
+
+export function TrainingCardView({ card, onDelete }: { card: TrainingCard; onDelete?: (card: TrainingCard) => void }) {
   return (
-    <article className="rounded-lg bg-white p-5 shadow-sm">
+    <article className="rounded-lg border border-[#dfe6dc] bg-white p-5 shadow-sm">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">{card.theme}</h2>
-          <p className="text-sm text-[#536158]">{card.date} · {card.location} · {card.duration || "时长未记录"}</p>
+          <p className="text-sm text-[#536158]">
+            {card.date_label ? `${card.date_label} ` : ""}{card.date} · {card.location} · {card.duration || "时长未记录"}
+          </p>
+          {card.storage_path ? <p className="mt-1 font-mono text-xs text-[#536158]">{card.storage_path}</p> : null}
+          {card.markdown_path ? <p className="mt-1 font-mono text-xs text-[#536158]">{card.markdown_path}</p> : null}
         </div>
+        {onDelete ? (
+          <button className="rounded-md border border-[#d8b9b9] px-3 py-1.5 text-xs font-medium text-[#9b2f2f] hover:bg-[#fff3f3]" onClick={() => onDelete(card)} type="button">
+            删除
+          </button>
+        ) : null}
       </div>
-      <div className="mt-4 grid gap-3 md:grid-cols-2">
-        <Section title="原计划" value={card.planned} />
-        <Section title="实际完成" value={card.actual_completed} />
-        <Section title="临时调整" value={card.adjustments} />
-        <Section title="身体反馈" value={card.body_feedback} />
-        <Section title="器械问题" value={card.equipment_notes} />
-        <Section title="未完成内容" value={card.unfinished_items} />
-      </div>
-      <div className="mt-4 rounded-md bg-[#f4f7f2] p-3 text-sm">
-        下次建议：{card.next_session_suggestions.join(" / ") || "暂无"}
+      <div className="mt-4 rounded-md bg-[#f7faf5] p-4">
+        <MarkdownBlock content={card.markdown || fallbackMarkdown(card)} />
       </div>
     </article>
   );
 }
-
-function Section({ title, value }: { title: string; value: unknown[] }) {
-  return (
-    <div className="rounded-md border border-[#e0e7df] p-3">
-      <div className="text-xs text-[#536158]">{title}</div>
-      <pre className="mt-2 whitespace-pre-wrap text-xs">{JSON.stringify(value, null, 2)}</pre>
-    </div>
-  );
-}
-

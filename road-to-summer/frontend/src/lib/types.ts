@@ -15,6 +15,9 @@ export type PlanSection = {
 
 export type PlanCard = {
   title: string;
+  target_date?: string;
+  date_label?: string;
+  timezone?: string;
   duration: string;
   goal: string;
   sections: PlanSection[];
@@ -24,7 +27,13 @@ export type PlanCard = {
 
 export type TrainingCard = {
   id?: string;
+  storage_path?: string;
+  markdown_path?: string;
+  markdown?: string;
   date: string;
+  timezone?: string;
+  date_label?: string;
+  completed_at?: string;
   location: string;
   duration: string;
   theme: string;
@@ -47,6 +56,10 @@ export type UiResponse = {
     current_session?: {
       theme?: string;
       goal?: string;
+      timezone?: string;
+      session_date?: string;
+      target_date?: string;
+      target_date_label?: string;
       progress?: string;
       current_exercise?: string;
       current_set?: number;
@@ -55,6 +68,48 @@ export type UiResponse = {
     quick_actions?: string[];
     training_card?: TrainingCard;
     memory_updates?: unknown[];
+  };
+};
+
+export type SessionSnapshot = {
+  id?: string;
+  created_at?: string;
+  started_at?: string;
+  updated_at?: string;
+  timezone?: string;
+  session_date?: string;
+  target_date?: string;
+  target_date_label?: string;
+  theme?: string;
+  goal?: string;
+  location?: string;
+  phase?: string;
+  current_exercise?: string;
+  current_set?: number;
+  progress?: string;
+  plan_card?: PlanCard;
+  current_plan?: PlanCard | null;
+  time_context?: {
+    timezone: string;
+    now_iso: string;
+    today: string;
+    target_date: string;
+    target_date_label: string;
+    target_offset_days: number;
+    temporal_intent: string;
+    date_source: string;
+    date_conflict?: {
+      selected_date: string;
+      resolved_date: string;
+      resolution: string;
+    };
+    mentioned_terms: string[];
+  };
+  storage?: {
+    state_root: string;
+    current_session: string;
+    current_plan: string;
+    training_cards_dir: string;
   };
 };
 

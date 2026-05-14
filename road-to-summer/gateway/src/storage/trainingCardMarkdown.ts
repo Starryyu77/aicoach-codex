@@ -1,0 +1,61 @@
+import type { TrainingCard } from "../hermes/types.ts";
+
+function text(value: unknown): string {
+  if (value === undefined || value === null || value === "") return "";
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return JSON.stringify(value);
+}
+
+function exerciseLine(value: unknown): string {
+  if (typeof value !== "object" || value === null) return text(value);
+  const item = value as Record<string, unknown>;
+  const name = text(item.exercise || item.name || item.operation || item.target_exercise || "项目");
+  const details = [
+    item.status ? `状态：${text(item.status)}` : "",
+    item.sets ? `组数：${text(item.sets)}` : "",
+    item.reps ? `次数：${text(item.reps)}` : "",
+    item.intensity ? `强度：${text(item.intensity)}` : "",
+    item.rest ? `休息：${text(item.rest)}` : "",
+    item.from || item.to ? `调整：${text(item.from)} -> ${text(item.to)}` : "",
+    item.reason ? `原因：${text(item.reason)}` : "",
+    item.note ? `备注：${text(item.note)}` : ""
+  ].filter(Boolean);
+  return details.length ? `**${name}**：${details.join("；")}` : `**${name}**`;
+}
+
+function listSection(title: string, values: unknown[] = []): string {
+  if (!values.length) return `## ${title}\n\n- 无`;
+  return [`## ${title}`, "", ...values.map((value) => `- ${exerciseLine(value)}`)].join("\n");
+}
+
+export function createTrainingCardMarkdown(card: TrainingCard): string {
+  return [
+    `# ${card.theme || "训练记录"}`,
+    "",
+    `- 日期：${card.date || ""}`,
+    card.date_label ? `- 日期语义：${card.date_label}` : "",
+    card.timezone ? `- 时区：${card.timezone}` : "",
+    card.completed_at ? `- 生成时间：${card.completed_at}` : "",
+    `- 场地：${card.location || ""}`,
+    `- 时长：${card.duration || "未记录"}`,
+    "",
+    listSection("原计划", card.planned),
+    "",
+    listSection("实际完成", card.actual_completed),
+    "",
+    listSection("临时调整", card.adjustments),
+    "",
+    listSection("身体反馈", card.body_feedback),
+    "",
+    listSection("疲劳反馈", card.fatigue_notes),
+    "",
+    listSection("疼痛 / 不适", card.pain_or_discomfort),
+    "",
+    listSection("器械情况", card.equipment_notes),
+    "",
+    listSection("未完成内容", card.unfinished_items),
+    "",
+    listSection("下次建议", card.next_session_suggestions)
+  ].join("\n").trimEnd() + "\n";
+}

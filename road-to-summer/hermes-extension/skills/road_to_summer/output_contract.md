@@ -2,6 +2,42 @@
 
 Hermes must output valid JSON. The UI Gateway must reject or repair non-JSON output before returning to the frontend.
 
+Every request includes `time_context`. Treat it as the only source of truth for date reasoning.
+
+```json
+{
+  "timezone": "Asia/Singapore",
+  "today": "2026-05-14",
+  "target_date": "2026-05-15",
+  "target_date_label": "明天",
+  "temporal_intent": "future_planning",
+  "date_source": "relative_text"
+}
+```
+
+- If the user asks about "today", "tomorrow", "yesterday", "the day before yesterday", or a specific date, use `time_context.target_date`.
+- If `time_context.date_source` is `explicit_text` or `relative_text`, it overrides stale UI selected dates.
+- If `time_context.date_conflict` exists, follow its `resolution` and mention the resolved date in `chat_message`.
+- For future planning, output `training_plan`; do not create a completed training card.
+- For backfilled training logs, output `training_card` and set `training_card.date` to `time_context.target_date`.
+
+Before producing the final JSON, classify the input:
+
+```json
+{
+  "time_analysis": {
+    "today": "",
+    "target_date": "",
+    "date_label": "",
+    "date_source": "explicit_text | relative_text | selected_date | default_today",
+    "temporal_intent": "future_planning | backfill_training_log | today_session | past_reference | selected_date | unspecified",
+    "classification": "future_training_plan | backfill_training_log | current_session_update | in_session_adjustment"
+  }
+}
+```
+
+`time_analysis` is optional in the response, but the classification must guide the chosen `type`.
+
 ## A. training_plan
 
 ```json
@@ -10,6 +46,9 @@ Hermes must output valid JSON. The UI Gateway must reject or repair non-JSON out
   "chat_message": "",
   "plan_card": {
     "title": "",
+    "target_date": "",
+    "date_label": "",
+    "timezone": "",
     "duration": "",
     "goal": "",
     "sections": [
@@ -76,6 +115,9 @@ Hermes must output valid JSON. The UI Gateway must reject or repair non-JSON out
   "chat_message": "",
   "training_card": {
     "date": "",
+    "date_label": "",
+    "timezone": "",
+    "completed_at": "",
     "location": "",
     "duration": "",
     "theme": "",
@@ -100,3 +142,45 @@ Hermes must output valid JSON. The UI Gateway must reject or repair non-JSON out
 }
 ```
 
+## D. training_review
+
+Use this for reviewing existing historical training records. Do not save a new training card.
+
+```json
+{
+  "type": "training_review",
+  "chat_message": "",
+  "review_card": {
+    "title": "",
+    "date_range": {
+      "from": "",
+      "to": "",
+      "label": ""
+    },
+    "scope": "single_day | multi_day | recent_series",
+    "referenced_cards": [],
+    "sessions": [
+      {
+        "date": "",
+        "theme": "",
+        "summary": "",
+        "highlights": [],
+        "issues": []
+      }
+    ],
+    "patterns": [],
+    "risks": [],
+    "next_actions": []
+  },
+  "quick_actions": []
+}
+```
+
+Use `training_review` when the user asks to:
+
+- 复盘某一天训练。
+- 回顾最近几次训练。
+- 分析前几天一整个系列训练。
+- 根据历史训练卡找规律、风险、下次安排依据。
+
+Never use `training_card` for a pure review request unless the user explicitly asks to补录/保存/生成训练卡.

@@ -26,6 +26,10 @@ export function validateAgentOutput(output: unknown): ValidationResult {
     if (!Array.isArray(output.memory_updates)) return { valid: false, error: "training_card.memory_updates missing" };
     return { valid: true };
   }
+  if (output.type === "training_review") {
+    if (!isObject(output.review_card)) return { valid: false, error: "training_review.review_card missing" };
+    if (typeof output.chat_message !== "string") return { valid: false, error: "training_review.chat_message missing" };
+    return { valid: true };
+  }
   return { valid: false, error: `unknown output type ${(output as HermesOutput).type}` };
 }
-

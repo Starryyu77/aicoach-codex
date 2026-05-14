@@ -9,6 +9,17 @@ export function secretsFilePath(runtimeRoot = defaultRuntimeRoot()) {
   return path.join(runtimeRoot, "secrets.env");
 }
 
+const SECRET_REF_PATTERN = /^[A-Z][A-Z0-9_]{0,127}$/;
+
+export function sanitizeSecretRef(ref?: string): string {
+  const trimmed = (ref || "").trim();
+  if (!trimmed) return "";
+  if (!SECRET_REF_PATTERN.test(trimmed)) {
+    throw new Error("Invalid secret ref. Use uppercase env-style names like OPENAI_API_KEY.");
+  }
+  return trimmed;
+}
+
 function parseEnv(text: string): Record<string, string> {
   const values: Record<string, string> = {};
   for (const line of text.split(/\r?\n/)) {
@@ -37,15 +48,18 @@ export async function loadSecretMap(runtimeRoot = defaultRuntimeRoot()): Promise
 }
 
 export async function getSecret(ref?: string, runtimeRoot = defaultRuntimeRoot()): Promise<string | undefined> {
-  if (!ref) return undefined;
+  const safeRef = sanitizeSecretRef(ref);
+  if (!safeRef) return undefined;
   const values = await loadSecretMap(runtimeRoot);
-  return values[ref];
+  return values[safeRef];
 }
 
 export async function setSecret(ref: string, value: string, runtimeRoot = defaultRuntimeRoot()) {
+  const safeRef = sanitizeSecretRef(ref);
+  if (!safeRef) throw new Error("Secret ref is required.");
   const filePath = secretsFilePath(runtimeRoot);
   await mkdir(path.dirname(filePath), { recursive: true });
   const current = await readFile(filePath, "utf8").then(parseEnv).catch(() => ({}));
-  current[ref] = value;
+  current[safeRef] = value;
   await writeFile(filePath, serializeEnv(current), "utf8");
 }

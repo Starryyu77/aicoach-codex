@@ -1,7 +1,37 @@
 export type InputSource = "text" | "voice" | "camera" | "quick_action" | "vision" | "system";
 
+export type TimeContext = {
+  timezone: string;
+  now_iso: string;
+  today: string;
+  target_date: string;
+  target_date_label: string;
+  target_offset_days: number;
+  temporal_intent:
+    | "today_session"
+    | "future_planning"
+    | "backfill_training_log"
+    | "past_reference"
+    | "selected_date"
+    | "unspecified";
+  date_source: "explicit_text" | "relative_text" | "selected_date" | "default_today";
+  date_conflict?: {
+    selected_date: string;
+    resolved_date: string;
+    resolution: "explicit_text_wins" | "relative_text_wins";
+  };
+  mentioned_terms: string[];
+};
+
 export type CurrentSession = {
   id?: string;
+  created_at?: string;
+  started_at?: string;
+  updated_at?: string;
+  timezone?: string;
+  session_date?: string;
+  target_date?: string;
+  target_date_label?: string;
   theme?: string;
   goal?: string;
   location?: string;
@@ -16,6 +46,7 @@ export type CurrentSession = {
 export type HermesMessage = {
   source: InputSource;
   raw_text: string;
+  time_context: TimeContext;
   current_session: CurrentSession;
   recent_training_cards?: TrainingCard[];
   memory_summary?: Record<string, unknown>;
@@ -42,11 +73,14 @@ export type PlanItem = {
 
 export type PlanSection = {
   name: string;
-  items: PlanItem[];
+  items: Array<PlanItem | string>;
 };
 
 export type PlanCard = {
   title: string;
+  target_date?: string;
+  date_label?: string;
+  timezone?: string;
   duration: string;
   goal: string;
   sections: PlanSection[];
@@ -78,7 +112,13 @@ export type PlanPatchOutput = {
 
 export type TrainingCard = {
   id?: string;
+  storage_path?: string;
+  markdown_path?: string;
+  markdown?: string;
   date: string;
+  timezone?: string;
+  date_label?: string;
+  completed_at?: string;
   location: string;
   duration: string;
   theme: string;
@@ -100,7 +140,33 @@ export type TrainingCardOutput = {
   memory_updates: MemoryUpdate[];
 };
 
-export type HermesOutput = TrainingPlanOutput | PlanPatchOutput | TrainingCardOutput;
+export type TrainingReviewOutput = {
+  type: "training_review";
+  chat_message: string;
+  review_card: {
+    title: string;
+    date_range: {
+      from?: string;
+      to?: string;
+      label: string;
+    };
+    scope: "single_day" | "multi_day" | "recent_series";
+    referenced_cards: string[];
+    sessions: Array<{
+      date: string;
+      theme: string;
+      summary: string;
+      highlights: string[];
+      issues: string[];
+    }>;
+    patterns: string[];
+    risks: string[];
+    next_actions: string[];
+  };
+  quick_actions?: string[];
+};
+
+export type HermesOutput = TrainingPlanOutput | PlanPatchOutput | TrainingCardOutput | TrainingReviewOutput;
 
 export type HermesResponse = {
   output: HermesOutput | string;
@@ -119,4 +185,3 @@ export type MovementAssessment = {
   };
   recommendation_needed: boolean;
 };
-

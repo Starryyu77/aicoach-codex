@@ -2,40 +2,86 @@ import { buildHermesMessage } from "../hermes/buildHermesMessage.ts";
 import { parseHermesResponse } from "../hermes/parseHermesResponse.ts";
 import type { InputSource } from "../hermes/types.ts";
 import { mapAgentOutputToUi } from "../ui/mapAgentOutputToUi.ts";
-import { getCurrentSession, saveCurrentPlan, saveCurrentSession } from "../storage/currentSessionStore.ts";
+import { getCurrentPlan, getCurrentSession, saveCurrentPlan, saveCurrentSession } from "../storage/currentSessionStore.ts";
 import { listTrainingCards, saveTrainingCard } from "../storage/trainingCardStore.ts";
 import { addPendingMemoryUpdates, getMockMemory } from "../storage/memoryStore.ts";
+import { buildTimeContext, type TimeContext } from "../time/timeContext.ts";
 import type { GatewayContext } from "./types.ts";
 
 export type ChatRequest = {
   text: string;
   source?: InputSource;
   quick_action?: string;
+  target_date?: string;
+  timezone?: string;
 };
+
+function expectedOutputType(rawText: string, timeContext: TimeContext): "training_plan" | "plan_patch" | "training_card" | "training_review" {
+  if (/(复盘|回顾|分析|看看).*(训练|记录)|(?:前几天|这几天|最近|某一天|5月\d{1,2}日|20\d{2}-\d{1,2}-\d{1,2}).*(训练|记录).*(复盘|总结|回顾|分析)/.test(rawText)) {
+    return "training_review";
+  }
+  if (timeContext.temporal_intent === "backfill_training_log") return "training_card";
+  if (/练完|训练结束|总结/.test(rawText)) return "training_card";
+  if (
+    timeContext.temporal_intent === "future_planning" ||
+    /该练什么|训练计划|帮我安排|安排.*训练|练什么/.test(rawText)
+  ) {
+    return "training_plan";
+  }
+  return "plan_patch";
+}
 
 export async function handleChat(context: GatewayContext, request: ChatRequest) {
   const session = await getCurrentSession(context.stateRoot);
+  const currentPlan = await getCurrentPlan(context.stateRoot);
   const recentTrainingCards = await listTrainingCards(context.stateRoot);
   const memory = await getMockMemory(context.stateRoot);
   const rawText = request.text || request.quick_action || "";
+  const timeContext = buildTimeContext({
+    rawText,
+    timezone: request.timezone || session.timezone,
+    targetDate: request.target_date || session.target_date
+  });
+  const sessionWithTime = {
+    ...session,
+    timezone: timeContext.timezone,
+    session_date: session.session_date || timeContext.target_date,
+    target_date: timeContext.target_date,
+    target_date_label: timeContext.target_date_label,
+    updated_at: timeContext.now_iso
+  };
   const message = buildHermesMessage({
     source: request.source || (request.quick_action ? "quick_action" : "text"),
     rawText,
-    currentSession: session,
+    currentSession: sessionWithTime,
     recentTrainingCards,
     memorySummary: memory,
-    expectedType: /练完|训练结束|总结/.test(rawText)
-      ? "training_card"
-      : /今天该练什么|今天训练|帮我安排/.test(rawText)
-        ? "training_plan"
-        : "plan_patch"
+    timeContext,
+    expectedType: expectedOutputType(rawText, timeContext)
   });
   const hermesProvider = await context.providerRegistry.getHermesProvider();
   const hermes = await hermesProvider.sendMessage(message);
   const output = parseHermesResponse(hermes);
-  const ui = mapAgentOutputToUi(output, session);
+  if (output.type === "training_plan") {
+    output.plan_card = {
+      ...output.plan_card,
+      target_date: timeContext.target_date,
+      date_label: timeContext.target_date_label,
+      timezone: timeContext.timezone
+    };
+  }
+  if (output.type === "training_card") {
+    output.training_card = {
+      ...output.training_card,
+      date: timeContext.target_date,
+      timezone: timeContext.timezone,
+      date_label: timeContext.target_date_label,
+      completed_at: timeContext.now_iso
+    };
+  }
+  const ui = mapAgentOutputToUi(output, sessionWithTime, currentPlan);
   if (ui.current_session) await saveCurrentSession(ui.current_session, context.stateRoot);
-  if (output.type === "training_plan") await saveCurrentPlan(output.plan_card, context.stateRoot);
+  if (ui.current_plan) await saveCurrentPlan(ui.current_plan, context.stateRoot);
   if (output.type === "training_card") {
     ui.training_card = await saveTrainingCard(output.training_card, context.stateRoot);
   }

@@ -50,6 +50,34 @@ UI Gateway 不是传统业务后端，不连接数据库。
 - 管理 provider 配置和 secret 引用。
 - 暴露 provider presets，让前端可做一体化配置向导。
 
+## Time Context Layer
+
+Gateway owns date normalization before calling Hermes:
+
+```text
+用户输入 / 前端选定日期
+  -> buildTimeContext
+  -> HermesMessage.time_context
+  -> Skill Pack temporal rules
+  -> training_plan.target_date / training_card.date
+```
+
+`time_context` includes:
+
+- `timezone`
+- `today`
+- `target_date`
+- `target_date_label`
+- `target_offset_days`
+- `temporal_intent`
+- `mentioned_terms`
+
+Rules:
+
+- 明天 / 后天：默认生成未来 `training_plan`。
+- 昨天 / 前天 / 两天前 + 补录 / 总结 / 练完：生成对应日期的 `training_card`。
+- Gateway 在保存前补齐或修正 `plan_card.target_date` 与 `training_card.date`，避免真实 Hermes 把补录内容存到错误日期。
+
 ## Provider Layer
 
 Gateway 通过 `ProviderRegistry` 获取 active provider，route 不直接 import mock：

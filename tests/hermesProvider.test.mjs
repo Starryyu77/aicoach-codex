@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { HermesApiServerProvider } from "../road-to-summer/gateway/src/providers/hermes/HermesApiServerProvider.ts";
 import { parseHermesResponse } from "../road-to-summer/gateway/src/hermes/parseHermesResponse.ts";
+import { buildTimeContext } from "../road-to-summer/gateway/src/time/timeContext.ts";
 
 test("Hermes API Server provider sends OpenAI-compatible chat completion request", async () => {
   const originalFetch = globalThis.fetch;
@@ -45,6 +46,7 @@ test("Hermes API Server provider sends OpenAI-compatible chat completion request
     const response = await provider.sendMessage({
       source: "text",
       raw_text: "高位下拉有人了",
+      time_context: buildTimeContext({ rawText: "高位下拉有人了" }),
       current_session: { id: "session-1" },
       instruction: "Return strict JSON."
     });

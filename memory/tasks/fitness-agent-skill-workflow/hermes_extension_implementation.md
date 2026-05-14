@@ -1,6 +1,6 @@
 # Hermes Extension Implementation
 
-Updated: 2026-05-13
+Updated: 2026-05-14
 
 ## Current State
 
@@ -132,6 +132,95 @@ Fix from test:
 Open issue:
 
 - Fatigue handling is still too shallow in real Hermes output. It avoids immediately ending training but does not explicitly evaluate local vs systemic fatigue, pain/dizziness, completion stage, and movement quality. Strengthen `road_to_summer` skill prompts and rules.
+- UX/state issues identified after first real UI test:
+  - Training Cockpit should not auto-generate a plan on page entry; plan generation must be an explicit user action.
+  - Plan cards need a visible "generation basis" area so users can see why Hermes generated the plan.
+  - Warmup or other string-only plan items from real Hermes must render as readable structured notes.
+  - History page must show where structured training card JSON files are saved.
+  - `plan_patch` responses must update persisted `current_plan.json` and `current_session.json`, including `current_exercise`.
+  - Frontend refresh must hydrate from `/session/current` instead of losing all page state.
+- Follow-up UX requirement:
+  - Chat and plan text should support Markdown display rather than plain text only.
+  - Training cards should be saved and rendered as sectioned Markdown, not raw JSON blobs.
+  - History cards must support deletion; deleting a card removes both the JSON cache and Markdown cache.
+  - Non-home frontend pages need a visible return/home navigation path; users should not need the browser chrome to leave Training, History, Memory, or Settings.
+
+## 2026-05-14 Time Context Update
+
+Implemented a first-class time layer across Gateway, Skill Pack, and frontend:
+
+- Gateway now builds `time_context` for every chat and vision request.
+- `time_context` includes timezone, absolute today date, target date, date label, offset, temporal intent, and mentioned date terms.
+- Relative date parsing covers 今天, 明天, 后天, 昨天, 前天, 前两天, 两天前, and explicit ISO / 月日 dates.
+- `buildHermesMessage.ts` instructs Hermes to use `time_context` as the only date source.
+- Training plans now carry `plan_card.target_date`, `date_label`, and `timezone`.
+- Training cards now carry `date`, `date_label`, `timezone`, and `completed_at`.
+- Gateway normalizes plan/card date fields before saving UI state or history, so real Hermes cannot silently save a backfilled card under the wrong date.
+- Training Cockpit now has a target date control with quick choices for 今天, 明天, 前天.
+- Chat placeholder now explicitly supports examples like "明天该练什么" and "前天练完帮我补记录".
+- Skill Pack docs now define temporal rules for future planning and backfilled logs.
+
+Verification:
+
+```text
+npm test -> 45 passed, 0 failed
+npm run build --prefix road-to-summer/frontend -> passed
+git diff --check -> clean
+```
+
+Follow-up fix after manual 5/13 backfill test:
+
+- Latest card `card-1778724577657` had correct training content but was saved as `2026-05-11 / 3 天前`.
+- The root cause was stale selected/session date overriding the intended natural-language date.
+- `time_context` now includes `date_source` and optional `date_conflict`.
+- Explicit text dates and relative text dates override stale UI selected dates.
+- Skill Pack now instructs Hermes to classify `future_training_plan`, `backfill_training_log`, `current_session_update`, and `in_session_adjustment` before choosing output type.
+- Added regression tests for `5月13日我练了下肢，帮我记录一下。` overriding stale `target_date = 2026-05-11`.
+- Corrected local runtime card `card-1778724577657` to `2026-05-13 / 昨天` and regenerated its Markdown.
+
+Verification after follow-up:
+
+```text
+npm test -> 48 passed, 0 failed
+npm run build --prefix road-to-summer/frontend -> passed
+git diff --check -> clean
+```
+
+## 2026-05-14 Scenario Test Follow-up
+
+Manual scenario testing found one more classification issue:
+
+- Backfill text such as "5月10日我做了上肢训练...最后有点累，帮我补录到历史记录" originally matched fatigue before backfill and returned `plan_patch`.
+- Fixed by raising `backfill_training_log` priority above fatigue/equipment/action feedback handling.
+- Added `training_review` output type for pure historical review.
+- Pure review now returns `training_review` and does not create a new training card.
+- Skill Pack was synced to `~/.hermes/skills/road_to_summer/`.
+
+Isolated scenario test results:
+
+```text
+补录训练 -> training_card, date=2026-05-10, history_delta=1
+提前规划 -> training_plan, target_date=2026-05-16, history_delta=0
+单日复盘 -> training_review, scope=single_day, history_delta=0
+系列复盘 -> training_review, scope=recent_series, sessions=2, history_delta=0
+```
+
+Real Hermes checks:
+
+```text
+local-hermes capabilities -> ok
+真实 Hermes 单日复盘 -> training_review, referenced card-1778724577657, history count 3 -> 3
+真实 Hermes 补录 in temp state -> training_card, date=2026-05-10, history_delta=1
+真实 Hermes 提前规划 in temp state -> training_plan, target_date=2026-05-16, history_delta=0
+真实 Hermes 系列复盘 -> training_review, history count 3 -> 3
+```
+
+Verification after scenario follow-up:
+
+```text
+npm test -> 50 passed, 0 failed
+npm run build --prefix road-to-summer/frontend -> passed
+```
 
 Gateway tests cover:
 

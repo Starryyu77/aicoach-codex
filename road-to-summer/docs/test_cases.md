@@ -1,6 +1,6 @@
 # Road to Summer Test Cases
 
-Updated: 2026-05-13
+Updated: 2026-05-14
 
 This test plan verifies the first real integration build:
 
@@ -84,7 +84,7 @@ npm test
 Expected:
 
 ```text
-36 tests passed
+50 tests passed
 0 failed
 ```
 
@@ -99,8 +99,97 @@ Coverage:
 - Hermes API Server request shape.
 - Doubao ASR request shape.
 - Hermes Runtime MiniMax config.
+- Time context parsing and absolute date propagation.
+- Explicit text date overrides stale selected/session date.
+- Historical review returns `training_review` and does not create training cards.
 
 This suite does not spend real MiniMax / Doubao quota except when manually testing live endpoints.
+
+## 1.1 Time Context Regression
+
+### TC-TIME-001: Future Plan
+
+Input:
+
+```text
+明天该练什么？
+```
+
+Expected:
+
+- Gateway creates `time_context.temporal_intent = future_planning`.
+- Hermes request includes absolute `time_context.target_date`.
+- Response type is `training_plan`.
+- `plan_card.target_date` is tomorrow's absolute date.
+- No training card is saved.
+
+### TC-TIME-002: Backfilled Training Card
+
+Input:
+
+```text
+前天练完了，帮我补一张训练卡。
+```
+
+Expected:
+
+- Gateway creates `time_context.temporal_intent = backfill_training_log`.
+- Response type is `training_card`.
+- Saved card `date` is the day before yesterday's absolute date.
+- Saved Markdown includes `日期语义：前天`.
+
+### TC-TIME-003: Selected Date in Training Cockpit
+
+Steps:
+
+1. Open `/training`.
+2. Use the target date control to choose a non-today date.
+3. Click generate plan.
+
+Expected:
+
+- Frontend sends `target_date` to Gateway.
+- Gateway includes selected date in `time_context`.
+- Plan header and current plan card show the selected target date.
+
+### TC-TIME-004: Explicit User Date Wins
+
+Input:
+
+```text
+5月13日我练了下肢，帮我记录一下。
+```
+
+With stale selected date:
+
+```json
+{
+  "target_date": "2026-05-11"
+}
+```
+
+Expected:
+
+- Gateway creates `time_context.date_source = explicit_text`.
+- Gateway creates `time_context.date_conflict.resolution = explicit_text_wins`.
+- Response type is `training_card`.
+- Saved card date is `2026-05-13`, not the stale selected date.
+
+### TC-TIME-005: Historical Review Does Not Write History
+
+Input:
+
+```text
+复盘一下5月13日的训练。
+复盘前几天这一整个系列训练。
+```
+
+Expected:
+
+- Response type is `training_review`.
+- Single-day review uses `scope = single_day`.
+- Series review uses `scope = recent_series` or `multi_day`.
+- History card count does not increase.
 
 ## 2. Real Hermes Smoke Test
 
@@ -627,4 +716,3 @@ POST /providers/hermes/test -> ok, local-hermes
 POST /providers/asr/test -> ok, doubao-asr-flash
 POST /chat "今天该练什么？" -> 200, training_plan, approximately 45s
 ```
-

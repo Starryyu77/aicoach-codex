@@ -71,7 +71,7 @@ export class HermesApiServerProvider implements HermesProvider {
         messages: [
           {
             role: "system",
-            content: "Use Road to Summer Skill Pack. Output only valid JSON: training_plan, plan_patch, or training_card."
+            content: "Use Road to Summer Skill Pack. Output only valid JSON: training_plan, plan_patch, training_card, or training_review."
           },
           {
             role: "user",

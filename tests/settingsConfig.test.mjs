@@ -5,6 +5,8 @@ import path from "node:path";
 import test from "node:test";
 import { ProviderConfigStore } from "../road-to-summer/gateway/src/providers/ProviderConfigStore.ts";
 import { ProviderRegistry } from "../road-to-summer/gateway/src/providers/ProviderRegistry.ts";
+import { sanitizeSecretRef } from "../road-to-summer/gateway/src/config/secrets.ts";
+import { isAllowedOrigin } from "../road-to-summer/gateway/src/server.ts";
 import {
   handleHermesRuntimeGet,
   handleHermesRuntimePresetsGet,
@@ -57,4 +59,13 @@ test("Hermes runtime config stores MiniMax key as local secret only", async () =
   const secrets = await readFile(path.join(runtimeRoot, "secrets.env"), "utf8");
   assert.match(secrets, /MINIMAX_API_KEY="sk-minimax-test"/);
   assert.match(secrets, /HERMES_INFERENCE_PROVIDER="minimax"/);
+});
+
+test("security config rejects malformed secret refs and non-local CORS origins", () => {
+  assert.equal(sanitizeSecretRef("OPENAI_API_KEY"), "OPENAI_API_KEY");
+  assert.throws(() => sanitizeSecretRef("BAD=KEY"), /Invalid secret ref/);
+  assert.throws(() => sanitizeSecretRef("BAD\nKEY"), /Invalid secret ref/);
+  assert.equal(isAllowedOrigin("http://localhost:3000"), true);
+  assert.equal(isAllowedOrigin("http://127.0.0.1:3000"), true);
+  assert.equal(isAllowedOrigin("https://attacker.example"), false);
 });

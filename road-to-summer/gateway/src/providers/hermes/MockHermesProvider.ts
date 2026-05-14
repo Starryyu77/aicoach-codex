@@ -1,5 +1,6 @@
 import { MockHermesClient } from "../../hermes/HermesClient.ts";
 import type { HermesMessage, HermesResponse } from "../../hermes/types.ts";
+import { buildTimeContext } from "../../time/timeContext.ts";
 import type { HermesProvider, ProviderInstance, ProviderTestResult } from "../types.ts";
 
 export class MockHermesProvider implements HermesProvider {
@@ -18,6 +19,7 @@ export class MockHermesProvider implements HermesProvider {
     const result = await this.sendMessage({
       source: "text",
       raw_text: "今天该练什么？",
+      time_context: buildTimeContext({ rawText: "今天该练什么？" }),
       current_session: {},
       instruction: "Return strict training_plan JSON."
     });

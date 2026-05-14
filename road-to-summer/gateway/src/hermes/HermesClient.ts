@@ -14,9 +14,13 @@ const QUICK_ACTIONS = [
   "结束训练"
 ];
 
-function defaultPlan(): PlanCard {
+function defaultPlan(input?: HermesMessage): PlanCard {
+  const time = input?.time_context;
   return {
-    title: "背部拉力 + 核心稳定",
+    title: `${time?.target_date_label || "今天"}背部拉力 + 核心稳定`,
+    target_date: time?.target_date,
+    date_label: time?.target_date_label,
+    timezone: time?.timezone,
     duration: "45-60 分钟",
     goal: "增肌塑形 + 功能性维护",
     sections: [
@@ -100,16 +104,96 @@ function memoryUpdate(content: string, reason: string) {
   };
 }
 
+function reviewOutput(input: HermesMessage): HermesOutput {
+  const cards = input.recent_training_cards || [];
+  const targetDate = input.time_context.target_date;
+  const isSeriesReview = /前几天|这几天|最近|系列|一整个|这一整个/.test(input.raw_text);
+  const targetMatches = isSeriesReview ? [] : cards.filter((card) => card.date === targetDate);
+  const picked = targetMatches.length ? targetMatches : cards.slice(0, 3);
+  const sessions = picked.map((card) => ({
+    date: card.date,
+    theme: card.theme,
+    summary: `${card.date} ${card.theme}，完成 ${card.actual_completed?.length || 0} 项，调整 ${card.adjustments?.length || 0} 项。`,
+    highlights: [
+      ...(((card as any).performance_notes as unknown[]) || []),
+      ...(card.actual_completed || []).slice(0, 2).map((item) => typeof item === "string" ? item : JSON.stringify(item))
+    ].slice(0, 3),
+    issues: [
+      ...(card.body_feedback || []),
+      ...(card.unfinished_items || [])
+    ].slice(0, 3).map((item) => typeof item === "string" ? item : JSON.stringify(item))
+  }));
+  return {
+    type: "training_review",
+    chat_message: picked.length
+      ? `已按 ${input.time_context.target_date_label}（${targetDate}）和最近训练记录做复盘，没有新增训练卡。`
+      : "当前没有可复盘的训练卡片。先补录或完成一次训练后再复盘。",
+    review_card: {
+      title: picked.length ? "训练复盘" : "训练复盘：暂无记录",
+      date_range: {
+        from: picked.at(-1)?.date,
+        to: picked[0]?.date,
+        label: targetMatches.length ? input.time_context.target_date_label : "最近训练"
+      },
+      scope: targetMatches.length ? "single_day" : "recent_series",
+      referenced_cards: picked.map((card) => card.id || card.date),
+      sessions,
+      patterns: picked.length ? ["复盘优先读取历史训练卡，不写入新的完成记录。"] : [],
+      risks: picked.flatMap((card) => card.pain_or_discomfort || []).slice(0, 3).map((item) => String(item)),
+      next_actions: picked.length ? ["根据复盘结果决定下一次训练方向；如有疼痛或异常疲劳，先降低强度。"] : ["先补录目标日期训练卡。"]
+    },
+    quick_actions: QUICK_ACTIONS
+  };
+}
+
+function trainingCardOutput(input: HermesMessage): HermesOutput {
+  const time = input.time_context;
+  return {
+    type: "training_card",
+    chat_message: `已生成 ${time.target_date_label}（${time.target_date}）的训练卡片。`,
+    training_card: {
+      date: time.target_date,
+      timezone: time.timezone,
+      date_label: time.target_date_label,
+      completed_at: time.now_iso,
+      location: input.current_session.location || "公寓健身房",
+      duration: "",
+      theme: input.current_session.theme || "背部拉力 + 核心稳定",
+      planned: input.current_session.plan_card?.sections || [],
+      actual_completed: [],
+      adjustments: input.current_session.events || [],
+      equipment_notes: [],
+      body_feedback: [],
+      fatigue_notes: [],
+      pain_or_discomfort: [],
+      unfinished_items: [],
+      next_session_suggestions: ["下次优先读取本次训练卡片、器械状态和身体反馈，再决定训练方向。"]
+    },
+    memory_updates: [
+      memoryUpdate("本次训练卡片已生成，可用于下次训练计划。", "训练卡片是下一次训练的重要上下文。")
+    ]
+  };
+}
+
 function outputForText(input: HermesMessage): HermesOutput {
   const text = input.raw_text;
+  const time = input.time_context;
 
-  if (/今天该练什么|今天训练|帮我安排/.test(text)) {
+  if (/(复盘|回顾|分析|看看).*(训练|记录)|(?:前几天|这几天|最近|某一天|5月\d{1,2}日|20\d{2}-\d{1,2}-\d{1,2}).*(训练|记录).*(复盘|总结|回顾|分析)/.test(text)) {
+    return reviewOutput(input);
+  }
+
+  if (/该练什么|今天训练|明天.*训练|明天.*练|后天.*训练|后天.*练|帮我安排|训练计划/.test(text) || time.temporal_intent === "future_planning") {
     return {
       type: "training_plan",
-      chat_message: "今天建议做背部拉力 + 核心稳定。计划已经整理成卡片。",
-      plan_card: defaultPlan(),
+      chat_message: `${time.target_date_label}（${time.target_date}）建议做背部拉力 + 核心稳定。计划已经整理成卡片。`,
+      plan_card: defaultPlan(input),
       quick_actions: QUICK_ACTIONS
     };
+  }
+
+  if (/练完|训练结束|总结|补录|回填|补.*训练|前天.*练|两天前.*练|前两天.*练/.test(text) || time.temporal_intent === "backfill_training_log") {
+    return trainingCardOutput(input);
   }
 
   if (/高位下拉.*修好|高位下拉.*可用/.test(text)) {
@@ -198,31 +282,6 @@ function outputForText(input: HermesMessage): HermesOutput {
     };
   }
 
-  if (/练完|训练结束|总结/.test(text)) {
-    return {
-      type: "training_card",
-      chat_message: "已生成本次训练卡片。",
-      training_card: {
-        date: new Date().toISOString().slice(0, 10),
-        location: input.current_session.location || "公寓健身房",
-        duration: "",
-        theme: input.current_session.theme || "背部拉力 + 核心稳定",
-        planned: input.current_session.plan_card?.sections || [],
-        actual_completed: [],
-        adjustments: input.current_session.events || [],
-        equipment_notes: [],
-        body_feedback: [],
-        fatigue_notes: [],
-        pain_or_discomfort: [],
-        unfinished_items: [],
-        next_session_suggestions: ["下次优先读取本次训练卡片、器械状态和身体反馈，再决定训练方向。"]
-      },
-      memory_updates: [
-        memoryUpdate("本次训练卡片已生成，可用于下次训练计划。", "训练卡片是下一次训练的重要上下文。")
-      ]
-    };
-  }
-
   if (input.movement_assessment) {
     return {
       type: "plan_patch",
@@ -262,4 +321,3 @@ export class MockHermesClient implements HermesClient {
     };
   }
 }
-
