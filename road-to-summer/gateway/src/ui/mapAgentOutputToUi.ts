@@ -39,20 +39,36 @@ function isGenericTarget(value?: string): boolean {
 
 function itemMatchesPatch(item: PlanItem, patch: PlanPatchOutput["patch"], currentSession: CurrentSession): boolean {
   const itemId = (item as PlanItem & { item_id?: string }).item_id;
-  if (patch.target_item_id && itemId && patch.target_item_id === itemId) return true;
+  if (patch.target_item_id) return Boolean(itemId && patch.target_item_id === itemId);
   if (currentSession.current_item_id && itemId && currentSession.current_item_id === itemId && isGenericTarget(patch.target_exercise)) {
     return true;
   }
   const exercise = normalized(item.exercise);
   const candidates = [
     patch.target_exercise,
-    patch.from,
-    currentSession.current_exercise
+    patch.from
   ].map(normalized).filter(Boolean);
   if (isGenericTarget(patch.target_exercise) && currentSession.current_exercise) {
     return exercise === normalized(currentSession.current_exercise);
   }
   return candidates.some((candidate) => candidate.includes(exercise) || exercise.includes(candidate));
+}
+
+function sectionMatchesPatch(section: PlanCard["sections"][number], patch: PlanPatchOutput["patch"], currentSession: CurrentSession): boolean {
+  if (patch.target_section_id && section.section_id && patch.target_section_id === section.section_id) return true;
+  const sectionName = normalized(section.name);
+  if (!sectionName) return false;
+  const candidates = [
+    patch.target_exercise,
+    patch.from
+  ];
+  if (isGenericTarget(patch.target_exercise) && currentSession.current_exercise) {
+    candidates.push(currentSession.current_exercise);
+  }
+  return candidates
+    .map(normalized)
+    .filter(Boolean)
+    .some((candidate) => candidate === sectionName || candidate.includes(sectionName) || sectionName.includes(candidate));
 }
 
 function patchPlanItem(item: PlanItem, patch: PlanPatchOutput["patch"]): PlanItem {
@@ -107,31 +123,66 @@ function patchPlanItem(item: PlanItem, patch: PlanPatchOutput["patch"]): PlanIte
   return item;
 }
 
-function applyPlanPatch(plan: PlanCard | undefined, patch: PlanPatchOutput["patch"], currentSession: CurrentSession): PlanCard | undefined {
-  if (!plan) return undefined;
+type PlanPatchApplyResult = {
+  plan?: PlanCard;
+  changed: boolean;
+  matchedItems: number;
+};
+
+function applyPlanPatch(plan: PlanCard | undefined, patch: PlanPatchOutput["patch"], currentSession: CurrentSession): PlanPatchApplyResult {
+  if (!plan) return { changed: false, matchedItems: 0 };
   const planSections = Array.isArray(plan.sections) ? plan.sections : [];
-  if (!planSections.length) return plan;
+  if (!planSections.length) return { plan, changed: false, matchedItems: 0 };
   let changed = false;
-  const sections = planSections.map((section) => ({
-    ...section,
-    items: (Array.isArray(section.items) ? section.items : []).map((item) => {
+  let matchedItems = 0;
+  const sections = planSections.map((section) => {
+    let matchedInSection = false;
+    const items = (Array.isArray(section.items) ? section.items : []).map((item) => {
       if (!isPlanItem(item) || !itemMatchesPatch(item, patch, currentSession)) return item;
+      matchedItems += 1;
+      matchedInSection = true;
       changed = true;
       return patchPlanItem(item, patch);
-    })
-  }));
-  return changed
-    ? {
+    });
+    if (!matchedInSection && sectionMatchesPatch(section, patch, currentSession)) {
+      const fallbackIndex = items.findIndex(isPlanItem);
+      if (fallbackIndex >= 0) {
+        items[fallbackIndex] = patchPlanItem(items[fallbackIndex] as PlanItem, patch);
+        matchedItems += 1;
+        changed = true;
+      }
+    }
+    return {
+      ...section,
+      items
+    };
+  });
+  return {
+    changed,
+    matchedItems,
+    plan: changed
+      ? {
         ...plan,
         plan_revision: typeof plan.plan_revision === "number" ? plan.plan_revision + 1 : 1,
         sections
       }
-    : plan;
+      : plan
+  };
 }
 
-function nextExerciseFromPatch(output: PlanPatchOutput, currentSession: CurrentSession): string | undefined {
+function explicitPlanContainsReplacement(plan: PlanCard | undefined, patch: PlanPatchOutput["patch"]): boolean {
+  if (!plan || patch.operation !== "replace_exercise" || !patch.to) return false;
+  const replacement = normalized(patch.to);
+  if (!replacement) return false;
+  return (Array.isArray(plan.sections) ? plan.sections : []).some((section) => (
+    (Array.isArray(section.items) ? section.items : []).some((item) => isPlanItem(item) && normalized(item.exercise) === replacement)
+  ));
+}
+
+function nextExerciseFromPatch(output: PlanPatchOutput, currentSession: CurrentSession, patchApplied: boolean): string | undefined {
+  if (patchApplied && output.patch.operation === "replace_exercise" && output.patch.to) return output.patch.to;
   if (output.session_update?.current_exercise) return output.session_update.current_exercise;
-  if (output.patch.operation === "replace_exercise" && output.patch.to) return output.patch.to;
+  if (!patchApplied) return currentSession.current_exercise;
   return output.patch.target_exercise || currentSession.current_exercise;
 }
 
@@ -160,7 +211,11 @@ export function mapAgentOutputToUi(output: HermesOutput, currentSession: Current
 
   if (output.type === "plan_patch") {
     const explicitPlan = isPlanCard(output.session_update?.plan_card) ? output.session_update.plan_card : undefined;
-    const patchedPlan = explicitPlan || applyPlanPatch((currentPlan || currentSession.plan_card) as PlanCard | undefined, output.patch, currentSession);
+    const patchResult = applyPlanPatch((explicitPlan || currentPlan || currentSession.plan_card) as PlanCard | undefined, output.patch, currentSession);
+    const explicitReplacementApplied = !patchResult.changed && explicitPlanContainsReplacement(explicitPlan, output.patch);
+    const patchApplied = patchResult.changed || explicitReplacementApplied;
+    const matchedItems = explicitReplacementApplied ? 1 : patchResult.matchedItems;
+    const patchedPlan = patchResult.plan;
     return {
       chat_message: output.chat_message,
       quick_actions: output.quick_actions,
@@ -169,9 +224,16 @@ export function mapAgentOutputToUi(output: HermesOutput, currentSession: Current
       current_session: {
         ...currentSession,
         ...(output.session_update || {}),
-        current_exercise: nextExerciseFromPatch(output, currentSession),
+        current_exercise: nextExerciseFromPatch(output, currentSession, patchApplied),
         plan_card: patchedPlan || output.session_update?.plan_card || currentSession.plan_card,
-        events: [...(currentSession.events || []), output.patch]
+        events: [
+          ...(currentSession.events || []),
+          {
+            ...output.patch,
+            patch_applied: patchApplied,
+            matched_items: matchedItems
+          }
+        ]
       }
     };
   }

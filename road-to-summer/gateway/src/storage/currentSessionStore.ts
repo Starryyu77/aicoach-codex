@@ -2,14 +2,19 @@ import { rm } from "node:fs/promises";
 import type { CurrentSession, PlanCard } from "../hermes/types.ts";
 import { ensureStateDirs, getStorePaths, readJson, writeJson } from "./fileStore.ts";
 import { buildTimeContext } from "../time/timeContext.ts";
-import { normalizeRelativeDateText } from "../time/absoluteDateText.ts";
+import { replaceRelativeDateLabels } from "../time/absoluteDateText.ts";
 
 function normalizePlanDateFields(plan?: PlanCard): PlanCard | undefined {
   if (!plan) return undefined;
   const targetDate = plan.target_date;
+  const normalizeText = (value: string) => replaceRelativeDateLabels(value, targetDate);
   return {
-    ...normalizeRelativeDateText(plan, targetDate),
-    date_label: undefined
+    ...plan,
+    date_label: undefined,
+    risk_notes: Array.isArray(plan.risk_notes) ? plan.risk_notes.map(normalizeText) : plan.risk_notes,
+    quality_warnings: Array.isArray(plan.quality_warnings) ? plan.quality_warnings.map(normalizeText) : plan.quality_warnings,
+    decision_basis: Array.isArray(plan.decision_basis) ? plan.decision_basis.map(normalizeText) : plan.decision_basis,
+    recent_training_summary: Array.isArray(plan.recent_training_summary) ? plan.recent_training_summary.map(normalizeText) : plan.recent_training_summary
   };
 }
 

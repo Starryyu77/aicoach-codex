@@ -529,6 +529,36 @@ test("history list normalizes MiniMax training_card shape with completed_exercis
   assert.doesNotMatch(history[0].markdown, /明天|日期语义/);
 });
 
+test("history list normalizes completed_items and ignores draft training plans", async () => {
+  const ctx = await context();
+  await saveTrainingCard({
+    date: "2026-05-14",
+    timezone: "Asia/Singapore",
+    theme: "下肢训练",
+    duration: "45 分钟",
+    location: "公寓健身房",
+    completed_items: [
+      { exercise: "台阶上步", sets_completed: 3 }
+    ],
+    next_actions: ["明天（5月15日）先检查膝盖。"]
+  }, ctx.stateRoot);
+  await assert.rejects(() => saveTrainingCard({
+    type: "training_plan",
+    date: "2026-05-15",
+    theme: "草稿训练计划",
+    duration: "40 分钟",
+    location: "公寓健身房",
+    sections: []
+  }, ctx.stateRoot), /Invalid training card shape/);
+
+  const history = await handleHistoryList(ctx);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].actual_completed[0].exercise, "台阶上步");
+  assert.match(history[0].markdown, /台阶上步/);
+  assert.match(history[0].markdown, /2026-05-15 先检查膝盖/);
+  assert.doesNotMatch(history[0].markdown, /明天/);
+});
+
 test("backfilled training summary saves training card on target date", async () => {
   const ctx = await context();
   const result = await handleChat(ctx, { text: "前天练完了，帮我补一张训练卡。" });

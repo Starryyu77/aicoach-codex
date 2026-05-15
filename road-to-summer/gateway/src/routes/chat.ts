@@ -1,6 +1,6 @@
 import { buildHermesMessage } from "../hermes/buildHermesMessage.ts";
 import { parseHermesResponse } from "../hermes/parseHermesResponse.ts";
-import type { ChatMessage, HermesMessage, HermesOutput, InputSource } from "../hermes/types.ts";
+import type { ChatMessage, CurrentSession, HermesMessage, HermesOutput, InputSource } from "../hermes/types.ts";
 import { mapAgentOutputToUi } from "../ui/mapAgentOutputToUi.ts";
 import { buildAgentUiDocument, validateAgentUiDocument } from "../ui/agentUi.ts";
 import { clearCurrentPlan, getCurrentPlan, getCurrentSession, saveCurrentPlan, saveCurrentSession } from "../storage/currentSessionStore.ts";
@@ -31,11 +31,41 @@ function expectedOutputType(rawText: string, timeContext: TimeContext): "trainin
   if (/总结/.test(rawText)) return "training_card";
   if (
     timeContext.temporal_intent === "future_planning" ||
-    /该练什么|训练计划|帮我安排|安排.*训练|练什么|今天想练|想练(?:胸|背|腿|肩|下肢|上肢)|今天.*练(?:胸|背|腿|肩|下肢|上肢)/.test(rawText)
+    /该练什么|训练计划|帮我安排|安排.*训练|练什么|今天想练|想练(?:胸|背|腿|肩|下肢|上肢)|今天.*练(?:胸|背|腿|肩|下肢|上肢)|训练[:：]?\s*(?:胸|胸部|背|背部|腿|肩|下肢|上肢)/.test(rawText)
   ) {
     return "training_plan";
   }
   return "plan_patch";
+}
+
+function isEndedSession(session: CurrentSession): boolean {
+  return session.phase === "ended";
+}
+
+function freshPlanningSession(session: CurrentSession, timeContext: TimeContext): CurrentSession {
+  return {
+    id: `session-${Date.now()}`,
+    created_at: timeContext.now_iso,
+    started_at: timeContext.now_iso,
+    updated_at: timeContext.now_iso,
+    timezone: timeContext.timezone,
+    session_date: timeContext.target_date,
+    target_date: timeContext.target_date,
+    target_date_label: timeContext.target_date_label,
+    location: session.location || "公寓健身房",
+    phase: "preworkout",
+    current_set: 1,
+    chat_messages: [],
+    events: []
+  };
+}
+
+function alignGeneratedPlanDate(message: string, targetDate: string): string {
+  if (!targetDate) return message;
+  return message
+    .replace(/已为\s*20\d{2}-\d{1,2}-\d{1,2}(?=\s*生成)/g, `已为 ${targetDate}`)
+    .replace(/已生成\s*20\d{2}-\d{1,2}-\d{1,2}(?=\s*的?训练计划)/g, `已生成 ${targetDate}`)
+    .replace(/为\s*20\d{2}-\d{1,2}-\d{1,2}(?=\s*生成训练计划)/g, `为 ${targetDate}`);
 }
 
 function appendChatMessages(
@@ -87,15 +117,19 @@ export async function handleChat(context: GatewayContext, request: ChatRequest) 
     timezone: request.timezone || session.timezone,
     targetDate: request.target_date || session.target_date
   });
+  const expectedType = expectedOutputType(rawText, timeContext);
+  const baseSession = isEndedSession(session) && expectedType === "training_plan"
+    ? freshPlanningSession(session, timeContext)
+    : session;
+  const activeCurrentPlan = baseSession === session ? currentPlan : undefined;
   const sessionWithTime = {
-    ...session,
+    ...baseSession,
     timezone: timeContext.timezone,
-    session_date: session.session_date || timeContext.target_date,
+    session_date: baseSession.session_date || timeContext.target_date,
     target_date: timeContext.target_date,
     target_date_label: timeContext.target_date_label,
     updated_at: timeContext.now_iso
   };
-  const expectedType = expectedOutputType(rawText, timeContext);
   const message = buildHermesMessage({
     source: inputSource,
     rawText,
@@ -115,6 +149,7 @@ export async function handleChat(context: GatewayContext, request: ChatRequest) 
     };
     const quality = enforcePlanQuality(output.plan_card, recentTrainingCards);
     output.plan_card = quality.plan;
+    output.chat_message = alignGeneratedPlanDate(output.chat_message, timeContext.target_date);
     output.chat_message = coachPlanMessage(output.chat_message, output.plan_card);
   }
   if (output.type === "training_card") {
@@ -126,7 +161,7 @@ export async function handleChat(context: GatewayContext, request: ChatRequest) 
       completed_at: timeContext.now_iso
     };
   }
-  const ui = mapAgentOutputToUi(output, sessionWithTime, currentPlan);
+  const ui = mapAgentOutputToUi(output, sessionWithTime, activeCurrentPlan);
   ui.agent_ui = buildAgentUiDocument(output, ui);
   const agentUiValidation = validateAgentUiDocument(ui.agent_ui);
   if (!agentUiValidation.valid) {

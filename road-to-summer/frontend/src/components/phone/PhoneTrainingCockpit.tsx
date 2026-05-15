@@ -11,6 +11,7 @@ import {
   startSession
 } from "../../lib/api";
 import type { AgentUiDocument, ChatMessage, PlanCard, PlanItem, SessionSnapshot } from "../../lib/types";
+import { canOpenCameraForTraining, normalizePhoneActions } from "../../lib/phoneSafety";
 import { CameraInputButton } from "../CameraInputButton";
 import { MusclePicker } from "./muscle-picker/MusclePicker";
 import { formatMuscleSelection, type MuscleKey } from "./muscle-picker/muscle-types";
@@ -35,26 +36,6 @@ const DEFAULT_ACTIONS = [
 const DEFAULT_TIMEZONE = "Asia/Singapore";
 const ACTIVE_SESSION_PHASES = new Set(["training", "in_session", "warmup", "main", "accessory", "cooldown"]);
 const ENDED_SESSION_PHASES = new Set(["ended", "completed"]);
-
-function actionLabel(value: unknown): string {
-  if (typeof value === "string" || typeof value === "number") return String(value);
-  if (typeof value !== "object" || value === null) return "";
-  const action = value as Record<string, unknown>;
-  const label = action.label || action.action || action.next_instruction || action.title || action.text;
-  return typeof label === "string" || typeof label === "number" ? String(label) : "";
-}
-
-function normalizeActions(value: unknown, fallback: string[] = []): string[] {
-  const seen = new Set<string>();
-  const source = Array.isArray(value) ? value : fallback;
-  return source
-    .map(actionLabel)
-    .filter((action) => {
-      if (!action || seen.has(action)) return false;
-      seen.add(action);
-      return true;
-    });
-}
 
 function isPlanItem(item: PlanItem | string): item is PlanItem {
   return typeof item === "object" && item !== null && "exercise" in item;
@@ -189,7 +170,7 @@ export function PhoneTrainingCockpit() {
         if (response.ui.current_session.target_date) setTargetDate(response.ui.current_session.target_date);
         if (response.ui.current_session.timezone) setTimezone(response.ui.current_session.timezone);
       }
-      if (response.ui.quick_actions) setQuickActions(normalizeActions(response.ui.quick_actions, DEFAULT_ACTIONS));
+      if (response.ui.quick_actions) setQuickActions(normalizePhoneActions(response.ui.quick_actions, DEFAULT_ACTIONS));
       if (response.ui.memory_updates?.length) {
         setRiskNote("有新的长期记忆候选，需用户确认后再写入 Hermes Memory。");
       }
@@ -262,7 +243,12 @@ export function PhoneTrainingCockpit() {
   }
 
   async function runCamera() {
-    if (!currentItem && !session?.current_exercise) {
+    if (!canOpenCameraForTraining({
+      hasPlan: Boolean(plan),
+      hasCurrentTarget: Boolean(currentItem || session?.current_exercise),
+      phase: session?.phase,
+      isBusy
+    })) {
       setMessages((items) => [...items, { role: "agent", text: "先生成或恢复一个训练计划，再打开摄像头检查具体动作。" }]);
       return;
     }
@@ -312,6 +298,30 @@ export function PhoneTrainingCockpit() {
     const muscleText = formatMuscleSelection(selectedMuscles);
     setSelectedMuscles([]);
     setMusclePickerOpen(false);
+    if (isEndedSessionPhase(session?.phase)) {
+      setBusy(true);
+      setStatusText("训练已结束，正在为新的肌群选择开启新对话...");
+      try {
+        const snapshot = await resetSession({ targetDate, timezone });
+        setPlan(undefined);
+        setMessages([]);
+        setSession(undefined);
+        setAgentUi(undefined);
+        setPlanExpanded(false);
+        mergeSession(snapshot);
+        if (snapshot.timezone) setTimezone(snapshot.timezone);
+        if (snapshot.target_date || snapshot.time_context?.target_date) {
+          setTargetDate(snapshot.target_date || snapshot.time_context?.target_date || targetDate);
+        }
+      } catch (error) {
+        const message = friendlyErrorMessage(error);
+        setStatusText(`Gateway 重置失败，已保留当前界面状态：${message}`);
+        setMessages((items) => [...items, { role: "agent", text: `Gateway 重置失败，当前界面状态已保留：${message}` }]);
+        setBusy(false);
+        return;
+      }
+      setBusy(false);
+    }
     await submit(`我想在 ${targetDate} 训练：${muscleText}。请根据这些部位生成训练计划。`);
   }
 
@@ -349,6 +359,12 @@ export function PhoneTrainingCockpit() {
 
   const isTrainingActive = isActiveSessionPhase(session?.phase);
   const isEnded = isEndedSessionPhase(session?.phase);
+  const canUseCamera = canOpenCameraForTraining({
+    hasPlan: Boolean(plan),
+    hasCurrentTarget: Boolean(currentItem || session?.current_exercise),
+    phase: session?.phase,
+    isBusy
+  });
   const bottomPaddingMode = isMusclePickerOpen
     ? "normal"
     : isTrainingActive
@@ -399,7 +415,13 @@ export function PhoneTrainingCockpit() {
 
       {isToolPanelOpen ? (
         <section className="rts-phone-tool-panel" aria-label="摄像头输入">
-          <CameraInputButton onClick={runCamera} />
+          {canUseCamera ? (
+            <CameraInputButton disabled={isBusy} onClick={runCamera} />
+          ) : (
+            <div className="rounded-lg border border-[#ecd9b8] bg-[#fffaf2] px-4 py-3 text-sm text-[#8a5b10]">
+              先生成或恢复一个训练计划，再打开摄像头检查具体动作。
+            </div>
+          )}
         </section>
       ) : null}
 

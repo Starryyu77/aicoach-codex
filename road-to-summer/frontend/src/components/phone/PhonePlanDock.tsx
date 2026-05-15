@@ -1,14 +1,10 @@
 "use client";
 
 import type { OfficialSourceTrace, PlanCard, PlanItem, PlanSection, SessionSnapshot } from "../../lib/types";
+import { phonePlanItemKey, phonePlanSectionKey, phoneSourceTraceKey, safeExternalHref } from "../../lib/phoneSafety";
 
 function isPlanItem(item: PlanItem | string): item is PlanItem {
   return typeof item === "object" && item !== null && "exercise" in item;
-}
-
-function itemKey(section: PlanSection, item: PlanItem | string, index: number) {
-  if (isPlanItem(item) && item.item_id) return item.item_id;
-  return `${section.section_id || section.name}-${index}-${isPlanItem(item) ? item.exercise : item}`;
 }
 
 function safeSections(plan: PlanCard): PlanSection[] {
@@ -17,10 +13,6 @@ function safeSections(plan: PlanCard): PlanSection[] {
 
 function safeItems(section: PlanSection): Array<PlanItem | string> {
   return Array.isArray(section.items) ? section.items : [];
-}
-
-function sourceTraceKey(source: OfficialSourceTrace, index: number) {
-  return `${source.framework || source.official_source || "source"}-${index}`;
 }
 
 type PhonePlanDockProps = {
@@ -89,12 +81,12 @@ export function PhonePlanDock({
             <span>{sections.length} 模块</span>
           </div>
           <div className="rts-phone-plan-sections">
-            {sections.map((section) => (
-              <section key={section.section_id || section.name}>
+            {sections.map((section, sectionIndex) => (
+              <section key={phonePlanSectionKey(section, sectionIndex)}>
                 <h3>{section.name || "训练模块"}</h3>
                 {safeItems(section).map((item, index) =>
                   isPlanItem(item) ? (
-                    <div className="rts-phone-plan-item" key={itemKey(section, item, index)}>
+                    <div className="rts-phone-plan-item" key={phonePlanItemKey(section, item, index)}>
                       <div>
                         <strong>{item.exercise}</strong>
                         <small>{item.cue || item.selection_reason || "按计划执行，训练中可随时调整。"}</small>
@@ -103,7 +95,7 @@ export function PhonePlanDock({
                       <span>{item.sets} x {item.reps}</span>
                     </div>
                   ) : (
-                    <p className="rts-phone-plan-note" key={itemKey(section, item, index)}>
+                    <p className="rts-phone-plan-note" key={phonePlanItemKey(section, item, index)}>
                       {item}
                     </p>
                   )
@@ -124,17 +116,29 @@ export function PhonePlanDock({
               ) : null}
               {officialSourceTrace.length ? (
                 <div className="rts-phone-official-sources" aria-label="官方来源">
-                  {officialSourceTrace.map((source, index) => (
-                    <a
-                      href={source.source_url}
-                      key={sourceTraceKey(source, index)}
-                      rel="noreferrer"
-                      target="_blank"
-                    >
-                      <strong>{source.framework || source.official_source}</strong>
-                      <small>{source.official_source || source.model}</small>
-                    </a>
-                  ))}
+                  {officialSourceTrace.map((source, index) => {
+                    const href = safeExternalHref(source.source_url);
+                    const content = (
+                      <>
+                        <strong>{source.framework || source.official_source}</strong>
+                        <small>{source.official_source || source.model}</small>
+                      </>
+                    );
+                    return href ? (
+                      <a
+                        href={href}
+                        key={phoneSourceTraceKey(source, index)}
+                        rel="noreferrer"
+                        target="_blank"
+                      >
+                        {content}
+                      </a>
+                    ) : (
+                      <span key={phoneSourceTraceKey(source, index)}>
+                        {content}
+                      </span>
+                    );
+                  })}
                 </div>
               ) : null}
             </div>

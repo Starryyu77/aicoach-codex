@@ -32,6 +32,14 @@ Chat/plan-patch correction from 2026-05-15:
 
 The phone and desktop chat transcript must be restored from Gateway state, not only held in component state. Gateway persists bounded `chat_messages` on the current session, `/session/current` returns the array even for older sessions, and both `/phone` plus `/training` hydrate their chat panels from it. `plan_patch` responses must also update the persisted `current_plan`, including object-shaped MiniMax fields such as `replacement: { exercise: ... }`, generic targets like `当前动作`, and explicit `updated_plan/current_plan/plan_card` aliases returned by Hermes.
 
+Testing review decision from 2026-05-15:
+
+The external testing reviews have been recorded as an incoming decision at `handoffs/incoming/2026-05-15-aicoach-phone-testing-review-decision.md`. The implementation direction is accepted, but the branch is not merge-ready until a P0 test gate exists for phone hydration/navigation, chat persistence, plan patch persistence, reset/end-session state, training-card history, date handling, no-fallback provider failures, final source attribution, A2UI safe rendering, and mobile viewport layout. When the two reviews conflict, the first expert review is authoritative; the second is used as a hardening addendum where non-conflicting.
+
+Testing implementation from 2026-05-15:
+
+The first P0 automated gate has been implemented without adding local fallback behavior. New tests cover final `handleChat` source attribution, target-item-specific plan patches, unmatched patch observability, provider invalid-output no-mutation behavior, chat truncation to the latest 80 messages, phone route state flow from reset/generate/adjust/hydrate/end/history, field-aware plan date normalization, invalid month-day handling, explicit Chinese-year date preservation, phone quick-action normalization, safe source URLs, stable plan keys, Agent UI duplicate id/missing root validation, and `completed_items` training-card normalization. Verification passed with `npm test` at 107/107, frontend and Gateway `tsc --noEmit`, and `npm --prefix road-to-summer/frontend run build`. Browser-level Playwright/RTL remains a follow-up because those dependencies are not currently configured in `road-to-summer/frontend`, and the sandbox blocks tests that bind a local HTTP port.
+
 ## Source Inputs
 
 - Current repo: `/Users/starryyu/2026/roadtosummer/aicoach-codex`

@@ -76,3 +76,34 @@ test("agent ui validator rejects unsupported component and missing child", () =>
   assert.equal(result.valid, false);
   assert.match(result.error, /unsupported|child/);
 });
+
+test("agent ui validator rejects duplicate component ids and missing root", () => {
+  const duplicate = {
+    version: "rts-a2ui-0.1",
+    surface: "training_cockpit",
+    root: "root",
+    components: [
+      { id: "root", type: "surface", children: [] },
+      { id: "root", type: "coach_message", props: { path: "/chat_message" } }
+    ],
+    data: {
+      chat_message: ""
+    }
+  };
+  const missingRoot = {
+    version: "rts-a2ui-0.1",
+    surface: "training_cockpit",
+    root: "missing",
+    components: [
+      { id: "root", type: "surface", children: [] }
+    ],
+    data: {
+      chat_message: ""
+    }
+  };
+
+  assert.equal(validateAgentUiDocument(duplicate).valid, false);
+  assert.match(validateAgentUiDocument(duplicate).error, /duplicate/);
+  assert.equal(validateAgentUiDocument(missingRoot).valid, false);
+  assert.match(validateAgentUiDocument(missingRoot).error, /root component not found/);
+});

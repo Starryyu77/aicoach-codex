@@ -1,6 +1,7 @@
 "use client";
 
 import type { AgentUiDocument } from "../../lib/types";
+import { normalizePhoneActions } from "../../lib/phoneSafety";
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -9,23 +10,6 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 function text(value: unknown, fallback = ""): string {
   if (typeof value === "string" || typeof value === "number") return String(value);
   return fallback;
-}
-
-function actionLabel(value: unknown): string {
-  if (typeof value === "string" || typeof value === "number") return String(value);
-  if (!isRecord(value)) return "";
-  return text(value.label || value.action || value.next_instruction || value.title || value.text);
-}
-
-function quickActions(value: unknown): string[] {
-  const seen = new Set<string>();
-  return (Array.isArray(value) ? value : [])
-    .map(actionLabel)
-    .filter((action) => {
-      if (!action || seen.has(action)) return false;
-      seen.add(action);
-      return true;
-    });
 }
 
 function operationLabel(operation?: string) {
@@ -54,7 +38,7 @@ export function PhoneAgentSurface({
   const plan = isRecord(data.plan) ? data.plan : undefined;
   const card = isRecord(data.training_card) ? data.training_card : undefined;
   const session = isRecord(data.session) ? data.session : undefined;
-  const actions = quickActions(data.quick_actions);
+  const actions = normalizePhoneActions(data.quick_actions);
 
   return (
     <section className="rts-phone-agent-card" aria-label="Hermes 结构化回复">
