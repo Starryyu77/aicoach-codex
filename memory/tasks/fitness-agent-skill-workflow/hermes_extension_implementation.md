@@ -169,6 +169,30 @@ npm run build --prefix road-to-summer/frontend -> passed
 git diff --check -> clean
 ```
 
+## 2026-05-15 Absolute Date Semantics Hardening
+
+Refined the date model after history records still felt ambiguous:
+
+- Frontend control remains concrete-date first: users choose an absolute `YYYY-MM-DD`, and Gateway passes both `time_context.today` and `time_context.target_date` to Hermes.
+- `target_date_label` is kept only as a backward-compatible absolute date field, not a relative label.
+- Added `absoluteDateText` normalization for saved plan/card display content:
+  - `今天 / 明天 / 昨天 / 前天 / 当天` are rewritten against the card or plan base date.
+  - bare month-day strings like `5月17日` are rewritten to `YYYY-MM-DD` using the base year.
+- Current session/current plan storage now strips `plan_card.date_label` and normalizes plan text against `plan_card.target_date`.
+- Training card storage and Markdown generation normalize relative date language before persisting or rendering history cards.
+- Memory display was refreshed and now shows absolute dates only.
+- Skill Pack and runtime prompts now explicitly tell Hermes to compare absolute `today` and `target_date` before deciding past/current/future behavior, and to avoid relative labels in primary plan/card explanations.
+
+Verification:
+
+```text
+npm test -> 93 passed, 0 failed
+road-to-summer/frontend/node_modules/.bin/tsc -p road-to-summer/gateway/tsconfig.json --noEmit -> passed
+npm run build --prefix road-to-summer/frontend -> passed
+git diff --check -> clean
+state check -> current session, current plan, memory display, and real card-* history files have no 今天/明天/昨天/前天/日期语义 residues except target_date_label as an absolute date compatibility field
+```
+
 ## 2026-05-15 Absolute Date Semantics Pass
 
 Changed the time and history model so relative date words are parsing hints only, not saved or displayed history semantics.
