@@ -3,7 +3,7 @@ import { ProviderRegistry } from "./providers/ProviderRegistry.ts";
 import { handleChat } from "./routes/chat.ts";
 import { handleVoiceTranscribe } from "./routes/voice.ts";
 import { handleVisionAssess } from "./routes/vision.ts";
-import { handleEndSession, handleGetCurrentSession, handleStartSession } from "./routes/session.ts";
+import { handleEndSession, handleGetCurrentSession, handleResetSession, handleStartSession } from "./routes/session.ts";
 import { handleHistoryDelete, handleHistoryDetail, handleHistoryList, handleHistoryUpdate } from "./routes/history.ts";
 import { handleMemoryConfirm, handleMemoryGet, handleMemoryRefresh } from "./routes/memory.ts";
 import {
@@ -113,6 +113,7 @@ export function createGatewayServer(context: GatewayContext = { providerRegistry
       if (method === "POST" && url.pathname === "/vision/assess") return send(request, response, 200, await handleVisionAssess(context, await readBody(request)));
       if (method === "GET" && url.pathname === "/session/current") return send(request, response, 200, await handleGetCurrentSession(context));
       if (method === "POST" && url.pathname === "/session/start") return send(request, response, 200, await handleStartSession(context, await readBody(request)));
+      if (method === "POST" && url.pathname === "/session/reset") return send(request, response, 200, await handleResetSession(context, await readBody(request)));
       if (method === "POST" && url.pathname === "/session/end") return send(request, response, 200, await handleEndSession(context, await readBody(request)));
       if (method === "GET" && url.pathname === "/history") return send(request, response, 200, await handleHistoryList(context));
       if (method === "DELETE" && url.pathname.startsWith("/history/")) return send(request, response, 200, await handleHistoryDelete(context, url.pathname.split("/").at(-1) || ""));

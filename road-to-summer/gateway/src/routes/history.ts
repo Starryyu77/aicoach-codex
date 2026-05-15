@@ -16,7 +16,6 @@ export async function handleHistoryDelete(context: GatewayContext, id: string) {
 export async function handleHistoryUpdate(context: GatewayContext, id: string, request: Record<string, unknown>) {
   return updateTrainingCard(id, {
     date: typeof request.date === "string" ? request.date : undefined,
-    date_label: typeof request.date_label === "string" ? request.date_label : undefined,
     timezone: typeof request.timezone === "string" ? request.timezone : undefined,
     location: typeof request.location === "string" ? request.location : undefined,
     duration: typeof request.duration === "string" ? request.duration : undefined,

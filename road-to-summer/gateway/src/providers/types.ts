@@ -2,7 +2,7 @@ import type { HermesMessage, HermesResponse, MovementAssessment } from "../herme
 
 export type ProviderCategory = "hermes" | "asr" | "vision";
 
-export type HermesProviderType = "mock" | "hermes-api-server" | "openai-compatible-hermes";
+export type HermesProviderType = "mock" | "hermes-api-server" | "openai-compatible-hermes" | "anthropic-compatible-hermes";
 export type AsrProviderType = "mock" | "openai-whisper" | "doubao-asr" | "groq-whisper" | "local-whisper";
 export type VisionProviderType = "mock" | "external-pose-http";
 

@@ -4,6 +4,129 @@ function isPlanItem(item: PlanItem | string): item is PlanItem {
   return typeof item === "object" && item !== null && "exercise" in item;
 }
 
+const DEFAULT_FRAMEWORK_TRACE = [
+  "ACE IFT: 先根据用户能力、环境、偏好和坚持度确定可执行起点。",
+  "NASM OPT: 用稳定耐力、力量耐力、肌肉发展等阶段判断该进阶还是回退。",
+  "NSCA Program Design: 按最近训练、总负荷、动作顺序和训练频率组织 session。",
+  "ACSM 2026 Resistance Training: 将目标映射到组数、次数、强度、休息和动作变量。",
+  "RPE/RIR Autoregulation: 根据目标日期的疲劳、动作质量和剩余次数感实时调整。"
+];
+
+const DEFAULT_OFFICIAL_SOURCE_TRACE: OfficialSourceTrace[] = [
+  {
+    framework: "ACE IFT",
+    model: "ACE Integrated Fitness Training Model",
+    official_source: "ACE IFT Model",
+    source_url: "https://www.acefitness.org/fitness-certifications/ace-ift-model/",
+    source_location: "ACE IFT 模型页面：从用户能力、环境、信心、偏好和坚持度出发做训练进阶。",
+    principle: "计划要从用户当下可执行的条件出发，而不是照搬模板。",
+    applied_decision: "本次训练根据公寓健身房、用户偏好和当前状态筛选动作。",
+    why_it_matters: "这能提高计划真实执行的概率。"
+  },
+  {
+    framework: "NASM OPT",
+    model: "Optimum Performance Training Model",
+    official_source: "NASM OPT Model",
+    source_url: "https://www.nasm.org/certified-personal-trainer/the-opt-model",
+    source_location: "NASM OPT 模型页面：训练阶段从稳定耐力、力量耐力、肌肉发展到最大力量和爆发力逐步推进。",
+    principle: "先判断训练阶段和动作控制，再决定强度。",
+    applied_decision: "本次训练先保证动作控制，再安排主训练刺激。",
+    why_it_matters: "这解释了为什么动作不是随机按部位堆叠。"
+  },
+  {
+    framework: "NSCA Program Design",
+    model: "NSCA program design / Essentials of Personal Training",
+    official_source: "NSCA Determination of Resistance Training Frequency",
+    source_url: "https://www.nsca.com/education/articles/kinetic-select/determination-of-resistance-training-frequency/",
+    source_location: "NSCA 训练频率资料：训练频率受动作选择、每次训练肌群、训练量、强度、训练状态和压力影响。",
+    principle: "先看最近训练和总负荷，再决定目标日期是否重复某个肌群或动作模式。",
+    applied_decision: "本次计划根据最近训练记录调整主训练方向和训练量。",
+    why_it_matters: "这避免刚练过的部位被机械重复安排。"
+  },
+  {
+    framework: "ACSM 2026",
+    model: "Resistance Training Prescription for Muscle Function, Hypertrophy, and Physical Performance in Healthy Adults",
+    official_source: "ACSM 2026 Resistance Training Guidelines Update",
+    source_url: "https://acsm.org/resistance-training-guidelines-update-2026/",
+    source_location: "ACSM 2026 抗阻训练指南更新：不同目标需要匹配不同训练变量，并强调个体化和一致性。",
+    principle: "把训练目标映射到组数、次数、强度、休息和速度意图等变量。",
+    applied_decision: "本次计划用明确的组数、次数、RPE 和休息服务当前目标。",
+    why_it_matters: "这让训练变量有依据，而不是只写一个动作名称。"
+  },
+  {
+    framework: "RPE/RIR Autoregulation",
+    model: "RPE / Repetitions in Reserve autoregulation",
+    official_source: "NSCA Coach: Using Intensity Based on Sets and Repetitions",
+    source_url: "https://www.nsca.com/education/articles/kinetic-select/using-intensity-based-on-sets-and-repetitions/",
+    source_location: "NSCA 关于 RPE/RIR 和自我调节的资料：训练变量可以根据目标日期表现、疲劳和剩余次数感调整。",
+    principle: "根据即时表现调整重量、次数、组数、休息或动作选择。",
+    applied_decision: "每个动作都提供下一组调整规则，训练中按反馈改。",
+    why_it_matters: "这避免计划死板执行，也避免用户一说累就直接结束。"
+  }
+];
+
+function compact(value?: string): string {
+  return typeof value === "string" ? value.trim() : "";
+}
+
+function traceKey(value?: string): string {
+  if (!value) return "";
+  if (/ACE/i.test(value)) return "ACE";
+  if (/NASM/i.test(value)) return "NASM";
+  if (/NSCA/i.test(value)) return "NSCA";
+  if (/ACSM/i.test(value)) return "ACSM";
+  if (/RPE|RIR|Autoregulation/i.test(value)) return "RPE_RIR";
+  return compact(value).toLowerCase();
+}
+
+function mergeFrameworkTrace(existing?: string[]): string[] {
+  const seen = new Set<string>();
+  return [...(Array.isArray(existing) ? existing : []), ...DEFAULT_FRAMEWORK_TRACE]
+    .map(compact)
+    .filter((item) => {
+      if (!item || seen.has(item)) return false;
+      seen.add(item);
+      return true;
+    });
+}
+
+function mergeTrace(defaultTrace: OfficialSourceTrace, existing?: OfficialSourceTrace): OfficialSourceTrace {
+  if (!existing) return defaultTrace;
+  return {
+    framework: compact(existing.framework) || defaultTrace.framework,
+    model: compact(existing.model) || defaultTrace.model,
+    official_source: compact(existing.official_source) || defaultTrace.official_source,
+    source_url: compact(existing.source_url) || defaultTrace.source_url,
+    source_location: compact(existing.source_location) || defaultTrace.source_location,
+    principle: compact(existing.principle) || defaultTrace.principle,
+    applied_decision: compact(existing.applied_decision) || defaultTrace.applied_decision,
+    why_it_matters: compact(existing.why_it_matters) || defaultTrace.why_it_matters
+  };
+}
+
+function mergeOfficialSourceTrace(existing?: OfficialSourceTrace[]): OfficialSourceTrace[] {
+  const byKey = new Map<string, OfficialSourceTrace>();
+  const unkeyed: OfficialSourceTrace[] = [];
+  for (const trace of Array.isArray(existing) ? existing : []) {
+    const key = traceKey(trace.framework || trace.official_source || trace.model);
+    if (!key) {
+      unkeyed.push(trace);
+      continue;
+    }
+    byKey.set(key, trace);
+  }
+
+  const merged = DEFAULT_OFFICIAL_SOURCE_TRACE.map((defaultTrace) => {
+    const key = traceKey(defaultTrace.framework);
+    return chineseTrace(mergeTrace(defaultTrace, byKey.get(key)));
+  });
+  const defaultKeys = new Set(DEFAULT_OFFICIAL_SOURCE_TRACE.map((trace) => traceKey(trace.framework)));
+  const extras = [...byKey.entries()]
+    .filter(([key]) => !defaultKeys.has(key))
+    .map(([, trace]) => chineseTrace(trace));
+  return [...merged, ...extras, ...unkeyed.map(chineseTrace)];
+}
+
 export function sourceNoteForRole(role?: string, exercise?: string): string {
   const name = exercise || "这个动作";
   if (role === "warmup") {
@@ -64,7 +187,7 @@ function chineseTrace(trace: OfficialSourceTrace): OfficialSourceTrace {
     return {
       ...trace,
       source_location: "NSCA 训练频率和计划设计资料：训练频率受动作选择、肌群安排、训练量、强度、训练状态和压力影响。",
-      principle: "先看最近训练和总负荷，再决定今天是否重复某个肌群或动作模式。",
+      principle: "先看最近训练和总负荷，再决定目标日期是否重复某个肌群或动作模式。",
       applied_decision: trace.applied_decision && !/[A-Za-z]{8,}/.test(trace.applied_decision)
         ? trace.applied_decision
         : "本次计划根据最近训练记录调整主训练方向和训练量。",
@@ -85,7 +208,7 @@ function chineseTrace(trace: OfficialSourceTrace): OfficialSourceTrace {
   if (/RPE|RIR/i.test(trace.framework)) {
     return {
       ...trace,
-      source_location: "NSCA 关于 RPE/RIR 和自我调节的资料：训练变量可以根据当天表现、疲劳和剩余次数感调整。",
+      source_location: "NSCA 关于 RPE/RIR 和自我调节的资料：训练变量可以根据目标日期表现、疲劳和剩余次数感调整。",
       principle: "根据即时表现调整重量、次数、组数、休息或动作选择。",
       applied_decision: trace.applied_decision && !/[A-Za-z]{8,}/.test(trace.applied_decision)
         ? trace.applied_decision
@@ -100,7 +223,8 @@ export function withPlanSourceNotes(plan: PlanCard): PlanCard {
   return {
     ...plan,
     sections: plan.sections.map(withSectionSourceNotes),
-    official_source_trace: plan.official_source_trace?.map(chineseTrace)
+    framework_trace: mergeFrameworkTrace(plan.framework_trace),
+    official_source_trace: mergeOfficialSourceTrace(plan.official_source_trace)
   };
 }
 
@@ -110,10 +234,10 @@ export function coachPlanMessage(message: string, plan: PlanCard): string {
   const firstMain = plan.sections
     .flatMap((section) => section.items)
     .find((item) => isPlanItem(item) && item.role === "main");
-  const exercise = isPlanItem(firstMain) ? firstMain.exercise : "主训练动作";
+  const exercise = firstMain && isPlanItem(firstMain) ? firstMain.exercise : "主训练动作";
   return [
     message,
     "",
-    `教练解释：今天我不是只按“想练哪里”排动作，而是先看最近训练和恢复窗口。这里用 NSCA 的训练频率/总负荷原则决定今天是否该重复某个肌群；再用 ACSM 抗阻训练变量原则给 ${exercise} 配组数、次数、RPE 和休息。每个动作下面我也会直接写清楚它来自哪个训练原则，以及下一组该怎么调整。`
+    `教练解释：这次我不是只按“想练哪里”排动作，而是先看目标日期、最近训练和恢复窗口。这里用 NSCA 的训练频率/总负荷原则决定目标日期是否该重复某个肌群；再用 ACSM 抗阻训练变量原则给 ${exercise} 配组数、次数、RPE 和休息。每个动作下面我也会直接写清楚它来自哪个训练原则，以及下一组该怎么调整。`
   ].join("\n");
 }

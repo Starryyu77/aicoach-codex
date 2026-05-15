@@ -33,6 +33,21 @@ export const PROVIDER_PRESETS: Record<ProviderCategory, ProviderPreset[]> = {
       timeoutMs: 30000,
       secretLabel: "Hermes API Key",
       secretPlaceholder: "Bearer token for the hosted Hermes endpoint"
+    },
+    {
+      id: "minimax-cn-hermes",
+      type: "anthropic-compatible-hermes",
+      label: "MiniMax CN Hermes Direct",
+      description: "Call MiniMax's Anthropic-compatible endpoint directly for mobile Hermes JSON responses.",
+      baseUrl: "https://api.minimaxi.com/anthropic",
+      model: "MiniMax-M2.7-highspeed",
+      apiKeyRef: "MINIMAX_CN_API_KEY",
+      timeoutMs: 90000,
+      extra: {
+        maxTokens: 3072
+      },
+      secretLabel: "MiniMax CN API Key",
+      secretPlaceholder: "sk-..."
     }
   ],
   asr: [

@@ -1,6 +1,25 @@
+import { rm } from "node:fs/promises";
 import type { CurrentSession, PlanCard } from "../hermes/types.ts";
 import { ensureStateDirs, getStorePaths, readJson, writeJson } from "./fileStore.ts";
 import { buildTimeContext } from "../time/timeContext.ts";
+
+function normalizePlanDateFields(plan?: PlanCard): PlanCard | undefined {
+  if (!plan) return undefined;
+  return {
+    ...plan,
+    date_label: undefined
+  };
+}
+
+function normalizeSessionDateFields(session: CurrentSession, fallbackTargetDate: string): CurrentSession {
+  const targetDate = session.target_date || session.session_date || fallbackTargetDate;
+  return {
+    ...session,
+    target_date: targetDate,
+    target_date_label: targetDate,
+    plan_card: normalizePlanDateFields(session.plan_card)
+  };
+}
 
 export async function getCurrentSession(stateRoot?: string): Promise<CurrentSession> {
   const paths = getStorePaths(stateRoot);
@@ -19,35 +38,46 @@ export async function getCurrentSession(stateRoot?: string): Promise<CurrentSess
     goal: "",
     location: "公寓健身房",
     current_set: 1,
+    chat_messages: [],
     events: []
   });
-  return {
+  return normalizeSessionDateFields({
     timezone: timeContext.timezone,
     session_date: timeContext.today,
     target_date: timeContext.target_date,
     target_date_label: timeContext.target_date_label,
-    ...session
-  };
+    ...session,
+    chat_messages: Array.isArray(session.chat_messages) ? session.chat_messages : []
+  }, timeContext.target_date);
 }
 
 export async function saveCurrentSession(session: CurrentSession, stateRoot?: string): Promise<CurrentSession> {
   const paths = getStorePaths(stateRoot);
   await ensureStateDirs(paths);
-  await writeJson(paths.sessionFile, session);
-  return session;
+  const normalized = normalizeSessionDateFields(session, session.target_date || session.session_date || buildTimeContext().target_date);
+  await writeJson(paths.sessionFile, normalized);
+  return normalized;
 }
 
 export async function saveCurrentPlan(plan: PlanCard, stateRoot?: string): Promise<PlanCard> {
   const paths = getStorePaths(stateRoot);
   await ensureStateDirs(paths);
-  await writeJson(paths.currentPlanFile, plan);
-  return plan;
+  const normalized = normalizePlanDateFields(plan) || plan;
+  await writeJson(paths.currentPlanFile, normalized);
+  return normalized;
+}
+
+export async function clearCurrentPlan(stateRoot?: string): Promise<void> {
+  const paths = getStorePaths(stateRoot);
+  await ensureStateDirs(paths);
+  await rm(paths.currentPlanFile, { force: true });
 }
 
 export async function getCurrentPlan(stateRoot?: string): Promise<PlanCard | null> {
   const paths = getStorePaths(stateRoot);
   await ensureStateDirs(paths);
-  return readJson<PlanCard | null>(paths.currentPlanFile, null);
+  const plan = await readJson<PlanCard | null>(paths.currentPlanFile, null);
+  return normalizePlanDateFields(plan || undefined) || null;
 }
 
 export async function startSession(partial: Partial<CurrentSession> = {}, stateRoot?: string): Promise<CurrentSession> {
@@ -69,7 +99,13 @@ export async function startSession(partial: Partial<CurrentSession> = {}, stateR
     goal: partial.goal || "",
     location: partial.location || "公寓健身房",
     current_set: 1,
+    chat_messages: [],
     events: []
   };
+  await clearCurrentPlan(stateRoot);
   return saveCurrentSession(session, stateRoot);
+}
+
+export async function resetSession(partial: Partial<CurrentSession> = {}, stateRoot?: string): Promise<CurrentSession> {
+  return startSession(partial, stateRoot);
 }

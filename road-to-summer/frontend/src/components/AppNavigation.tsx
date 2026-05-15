@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
 
 const ITEMS = [
+  { href: "/phone", label: "手机" },
   { href: "/training", label: "训练" },
   { href: "/history", label: "历史" },
   { href: "/memory", label: "Memory" },
@@ -13,7 +14,7 @@ const ITEMS = [
 export function AppNavigation() {
   const pathname = usePathname();
   const router = useRouter();
-  if (pathname === "/") return null;
+  if (pathname === "/" || pathname === "/phone") return null;
 
   function goBack() {
     if (window.history.length > 1) {

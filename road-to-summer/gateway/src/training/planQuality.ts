@@ -132,7 +132,7 @@ function conflictMessages(planMuscles: MuscleGroup[], recent: PlanQualityReport[
     if (overlap.length) {
       conflicts.push(`${session.days_ago} 天前刚练过 ${overlap.map((muscle) => MUSCLE_LABELS[muscle]).join("、")}（${session.date} ${session.theme}）`);
     } else if (shoulderCarryover) {
-      conflicts.push(`${session.days_ago} 天前有肩部训练负荷（${session.date} ${session.theme}），今天不应再安排高容量胸背肩组合`);
+      conflicts.push(`${session.days_ago} 天前有肩部训练负荷（${session.date} ${session.theme}），目标日期不应再安排高容量胸背肩组合`);
     }
   }
   return uniq(conflicts);
@@ -167,7 +167,7 @@ export function analyzePlanQuality(plan: PlanCard, recentCards: TrainingCard[]):
 }
 
 function recoveryPlan(base: PlanCard, report: PlanQualityReport): PlanCard {
-  const label = base.date_label || "目标日";
+  const label = base.target_date || "目标日期";
   const date = base.target_date || "";
   const officialSourceTrace: OfficialSourceTrace[] = [
     {
@@ -203,7 +203,7 @@ function recoveryPlan(base: PlanCard, report: PlanQualityReport): PlanCard {
   ];
   return withPlanSourceNotes({
     ...base,
-    title: `${label}恢复与功能维护`,
+    title: `${label} 恢复与功能维护`,
     duration: "25-40 分钟",
     goal: "避开最近 48-72 小时已高频刺激的肌群，优先恢复检查、活动度、核心稳定和低强度心肺。",
     sections: [
@@ -332,7 +332,7 @@ function recoveryPlan(base: PlanCard, report: PlanQualityReport): PlanCard {
     reasoning: [
       "Gateway 计划质量检查发现原计划与最近训练记录存在冲突，因此改为恢复与功能维护。",
       ...report.recent_summary.map((item) => `最近训练：${item}`),
-      "今天不继续堆胸背肩或高强度下肢，避免连续刺激肩背和下肢后链；保留轻量活动度、核心控制和低强度心肺。"
+      `${date || "目标日期"} 不继续堆胸背肩或高强度下肢，避免连续刺激肩背和下肢后链；保留轻量活动度、核心控制和低强度心肺。`
     ].join("\n"),
     framework_trace: [
       "ACE IFT: 根据当前可恢复性降低训练复杂度，保留用户可执行的活动。",
@@ -344,7 +344,7 @@ function recoveryPlan(base: PlanCard, report: PlanQualityReport): PlanCard {
     official_source_trace: officialSourceTrace,
     decision_basis: [
       ...report.recent_summary,
-      "规则：最近 48-72 小时刚训练过的主肌群，不作为今天主训练重复安排。",
+      "规则：最近 48-72 小时刚训练过的主肌群，不作为目标日期主训练重复安排。",
       "规则：有明显疲劳/酸感时，优先恢复检查和低强度训练。"
     ],
     recent_training_summary: report.recent_summary,
@@ -360,7 +360,7 @@ export function enforcePlanQuality(plan: PlanCard, recentCards: TrainingCard[]):
     sections: withPlanSourceNotes({ ...plan, sections }).sections,
     decision_basis: plan.decision_basis?.length ? plan.decision_basis : [
       ...report.recent_summary,
-      "规则：先看最近 1-3 次训练，再决定今天主训练肌群。",
+      "规则：先看最近 1-3 次训练，再决定目标日期主训练肌群。",
       "规则：计划生成后做动作去重和冲突检查。"
     ],
     recent_training_summary: report.recent_summary,

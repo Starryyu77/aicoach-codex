@@ -13,6 +13,7 @@ export function validateAgentOutput(output: unknown): ValidationResult {
   if (!isObject(output)) return { valid: false, error: "output is not an object" };
   if (output.type === "training_plan") {
     if (!isObject(output.plan_card)) return { valid: false, error: "training_plan.plan_card missing" };
+    if (!Array.isArray(output.plan_card.sections)) return { valid: false, error: "training_plan.plan_card.sections missing" };
     if (!Array.isArray(output.quick_actions)) return { valid: false, error: "training_plan.quick_actions missing" };
     return { valid: true };
   }

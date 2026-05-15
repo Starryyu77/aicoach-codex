@@ -130,18 +130,6 @@ function inferIntent(text: string, offset: number, hasSelectedDate: boolean): Te
   return "unspecified";
 }
 
-function labelForOffset(offset: number, hasExplicitTerm: boolean): string {
-  void hasExplicitTerm;
-  if (offset === -2) return "前天";
-  if (offset === -1) return "昨天";
-  if (offset === 0) return "今天";
-  if (offset === 1) return "明天";
-  if (offset === 2) return "后天";
-  if (offset < 0) return `${Math.abs(offset)} 天前`;
-  if (offset > 0) return `${offset} 天后`;
-  return "选定日期";
-}
-
 export function buildTimeContext(options: BuildTimeContextOptions = {}): TimeContext {
   const timezone = options.timezone || DEFAULT_TIMEZONE;
   const now = options.now || new Date();
@@ -197,7 +185,7 @@ export function buildTimeContext(options: BuildTimeContextOptions = {}): TimeCon
     now_iso: now.toISOString(),
     today,
     target_date: targetDate,
-    target_date_label: labelForOffset(offset, Boolean(explicit.term || relative.term)),
+    target_date_label: targetDate,
     target_offset_days: offset,
     temporal_intent: inferIntent(text, offset, hasSelectedDate),
     date_source: dateSource,

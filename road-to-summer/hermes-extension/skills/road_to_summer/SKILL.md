@@ -20,7 +20,7 @@ It must return UI-consumable JSON defined in `output_contract.md`.
 
 All user-facing output must be Chinese and coach-like. Do not present official sources as a separate academic reference table in the main experience. Use official frameworks as part of the coaching explanation:
 
-- `chat_message`: explain the plan in natural Chinese, for example "今天我先按 NSCA 的训练频率和总负荷原则看了你最近几次训练，所以不继续堆肩背。"
+- `chat_message`: explain the plan in natural Chinese with the concrete target date, for example "2026-05-16 我先按 NSCA 的训练频率和总负荷原则看了你最近几次训练，所以不继续堆肩背。"
 - Each exercise item: include `source_note`, for example "教练依据：这里参考 ACSM 的抗阻训练变量原则，用 3-4 组、RPE 7-8 和 90 秒休息来服务增肌刺激。"
 - `official_source_trace`: keep it for machine traceability and later audit, not as the primary user-facing display.
 
@@ -44,7 +44,7 @@ Inputs:
 
 - User training goal.
 - Current status: sleep, fatigue, pain, available time, location.
-- `time_context`: timezone, current date, target training date, date label, and temporal intent.
+- `time_context`: timezone, absolute current date, absolute target training date, date source, relative offset, and temporal intent.
 - Recent training cards.
 - Hermes Memory summary: preferences, risks, equipment, locations.
 - `exercise_selection_context`: target adaptation, readiness, movement priorities, constraints, and candidate roles from Gateway.
@@ -68,9 +68,10 @@ Exercise selection rule:
 Date rule:
 
 - If `time_context.temporal_intent` is `future_planning`, generate the plan for `time_context.target_date`.
-- Include `plan_card.target_date`, `plan_card.date_label`, and `plan_card.timezone`.
-- Do not assume "tomorrow" from the server clock; use `time_context`.
+- Include `plan_card.target_date` and `plan_card.timezone`.
+- Do not assume "tomorrow" from the server clock; compare `time_context.target_date` with `time_context.today`.
 - If the user text explicitly mentions a date, that date wins over the UI selected date.
+- Do not write relative labels such as "今天", "明天", "昨天", or "前天" into plan/card/history fields or primary UI-facing plan explanations. Use absolute dates.
 
 ## Workflow 2: In-session Adjustment
 
@@ -124,7 +125,7 @@ Output:
 Date rule:
 
 - Set `training_card.date` to `time_context.target_date`.
-- Use `training_card.date_label` to keep labels such as "前天" or "明天" visible.
+- Keep saved training records on absolute dates only. Do not use `training_card.date_label` for "今天", "昨天", "前天", or "明天".
 - If the user is backfilling a past workout, summarize it as a past training card, not as today's workout.
 
 ## Workflow 4: Historical Training Review

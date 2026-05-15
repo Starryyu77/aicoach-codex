@@ -1,4 +1,5 @@
 export type PlanItem = {
+  item_id?: string;
   exercise: string;
   role?: string;
   movement_pattern?: string;
@@ -16,11 +17,14 @@ export type PlanItem = {
 };
 
 export type PlanSection = {
+  section_id?: string;
   name: string;
   items: Array<PlanItem | string>;
 };
 
 export type PlanCard = {
+  plan_id?: string;
+  plan_revision?: number;
   title: string;
   target_date?: string;
   date_label?: string;
@@ -102,6 +106,10 @@ export type AgentUiDocument = {
     patch?: {
       operation: string;
       target_exercise: string;
+      target_item_id?: string;
+      target_section_id?: string;
+      applies_to_plan_id?: string;
+      applies_to_revision?: number;
       from?: string;
       to?: string;
       reason: string;
@@ -127,8 +135,12 @@ export type UiResponse = {
       target_date_label?: string;
       phase?: string;
       progress?: string;
+      plan_id?: string;
+      plan_revision?: number;
+      current_item_id?: string;
       current_exercise?: string;
       current_set?: number;
+      chat_messages?: ChatMessage[];
       plan_card?: PlanCard;
     };
     quick_actions?: string[];
@@ -136,6 +148,14 @@ export type UiResponse = {
     memory_updates?: unknown[];
     agent_ui?: AgentUiDocument;
   };
+};
+
+export type ChatMessage = {
+  id?: string;
+  role: "user" | "agent";
+  text: string;
+  source?: "text" | "voice" | "camera" | "quick_action" | "vision" | "system";
+  created_at?: string;
 };
 
 export type SessionSnapshot = {
@@ -152,8 +172,12 @@ export type SessionSnapshot = {
   location?: string;
   phase?: string;
   current_exercise?: string;
+  current_item_id?: string;
   current_set?: number;
+  plan_id?: string;
+  plan_revision?: number;
   progress?: string;
+  chat_messages?: ChatMessage[];
   plan_card?: PlanCard;
   current_plan?: PlanCard | null;
   time_context?: {

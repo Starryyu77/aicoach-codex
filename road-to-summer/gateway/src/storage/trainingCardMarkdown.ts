@@ -34,7 +34,6 @@ export function createTrainingCardMarkdown(card: TrainingCard): string {
     `# ${card.theme || "训练记录"}`,
     "",
     `- 日期：${card.date || ""}`,
-    card.date_label ? `- 日期语义：${card.date_label}` : "",
     card.timezone ? `- 时区：${card.timezone}` : "",
     card.completed_at ? `- 生成时间：${card.completed_at}` : "",
     `- 场地：${card.location || ""}`,

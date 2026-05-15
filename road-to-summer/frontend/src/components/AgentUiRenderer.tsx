@@ -45,14 +45,33 @@ function array(value: unknown): unknown[] {
   return Array.isArray(value) ? value : [];
 }
 
+function actionLabel(value: unknown): string {
+  if (typeof value === "string" || typeof value === "number") return String(value);
+  if (!isRecord(value)) return "";
+  return text(value.label || value.action || value.next_instruction || value.title || value.text);
+}
+
+function actionList(primary: unknown, fallback: unknown): string[] {
+  const source = array(primary).length ? array(primary) : array(fallback);
+  const seen = new Set<string>();
+  return source
+    .map(actionLabel)
+    .filter((action) => {
+      if (!action || seen.has(action)) return false;
+      seen.add(action);
+      return true;
+    });
+}
+
 function PlanSections({ sections }: { sections: PlanSection[] }) {
+  const safeSections = Array.isArray(sections) ? sections : [];
   return (
     <div className="grid gap-3">
-      {sections.map((section) => (
+      {safeSections.map((section) => (
         <div className="rounded-md border border-[#dfe6dc] bg-white" key={section.name}>
-          <div className="border-b border-[#dfe6dc] px-3 py-2 text-sm font-semibold text-[#1f7a5a]">{section.name}</div>
+          <div className="border-b border-[#dfe6dc] px-3 py-2 text-sm font-semibold text-[#1f7a5a]">{section.name || "训练模块"}</div>
           <div className="divide-y divide-[#e7eee5]">
-            {section.items.map((item, index) => (
+            {(Array.isArray(section.items) ? section.items : []).map((item, index) => (
               <div className="grid gap-1 p-3 text-sm md:grid-cols-[1fr_0.9fr]" key={`${section.name}-${index}-${isPlanItem(item) ? item.exercise : item}`}>
                 {isPlanItem(item) ? (
                   <>
@@ -119,7 +138,7 @@ function renderComponent(
       <div className="grid gap-2 rounded-md border border-[#dfe6dc] bg-[#fbfcfa] p-3 text-sm">
         <div className="font-semibold">{text(plan.title, "训练计划")}</div>
         <div className="text-[#536158]">{text(plan.goal)} · {text(plan.duration)}</div>
-        {text(plan.target_date) ? <div className="text-xs text-[#536158]">目标日期：{text(plan.date_label)} {text(plan.target_date)}</div> : null}
+        {text(plan.target_date) ? <div className="text-xs text-[#536158]">目标日期：{text(plan.target_date)}</div> : null}
       </div>
     );
   }
@@ -182,12 +201,12 @@ function renderComponent(
   }
 
   if (component.type === "action_row") {
-    const actions = array(value).length ? array(value).map(String) : array(props.actions).map(String);
+    const actions = actionList(value, props.actions);
     if (!actions.length) return null;
     return (
       <div className="flex flex-wrap gap-2">
-        {actions.map((action) => (
-          <button className="rounded-md bg-[#f4f7f2] px-3 py-2 text-sm hover:bg-[#e8f0e6]" key={action} type="button" onClick={() => onAction?.(action)}>
+        {actions.map((action, index) => (
+          <button className="rounded-md bg-[#f4f7f2] px-3 py-2 text-sm hover:bg-[#e8f0e6]" key={`${action}-${index}`} type="button" onClick={() => onAction?.(action)}>
             {action}
           </button>
         ))}

@@ -169,6 +169,30 @@ npm run build --prefix road-to-summer/frontend -> passed
 git diff --check -> clean
 ```
 
+## 2026-05-15 Absolute Date Semantics Pass
+
+Changed the time and history model so relative date words are parsing hints only, not saved or displayed history semantics.
+
+Implemented:
+
+- `time_context.target_date_label` now carries the absolute `YYYY-MM-DD` target date instead of labels like `今天`, `明天`, `昨天`, or `前天`.
+- Gateway prompts tell Hermes to compare `time_context.today` and `time_context.target_date` as absolute dates before deciding past / present / future.
+- Gateway prompts and Skill docs forbid relative date labels in `plan_card.date_label`, `training_card.date_label`, history cards, and generated Markdown.
+- Desktop Training Cockpit no longer exposes `今天 / 明天 / 前天` shortcut buttons; it uses the concrete `<input type="date">` as the control surface.
+- Phone Training Cockpit also uses a concrete date picker instead of relative date shortcut buttons.
+- History card rendering and editing removed the `日期语义` field; users edit the actual `YYYY-MM-DD` date directly.
+- `trainingCardStore` normalizes legacy `date_label` away when reading, listing, saving, or updating cards, and regenerates Markdown without `日期语义`.
+- Memory display snapshots now show absolute dates only.
+
+Verification:
+
+```text
+npm test -> 90 passed, 0 failed
+road-to-summer/frontend/node_modules/.bin/tsc -p road-to-summer/gateway/tsconfig.json --noEmit -> passed
+npm run build --prefix road-to-summer/frontend -> passed
+git diff --check -> clean
+```
+
 ## 2026-05-14 Training Session Flow Follow-up
 
 Fixed the live training cockpit feedback loop after testing the user flow:

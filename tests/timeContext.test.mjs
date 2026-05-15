@@ -12,7 +12,7 @@ test("time context resolves tomorrow in configured timezone", () => {
   });
   assert.equal(context.today, "2026-05-14");
   assert.equal(context.target_date, "2026-05-15");
-  assert.equal(context.target_date_label, "明天");
+  assert.equal(context.target_date_label, "2026-05-15");
   assert.equal(context.temporal_intent, "future_planning");
 });
 
@@ -23,7 +23,7 @@ test("time context resolves backfilled day before yesterday logs", () => {
     now
   });
   assert.equal(context.target_date, "2026-05-12");
-  assert.equal(context.target_date_label, "前天");
+  assert.equal(context.target_date_label, "2026-05-12");
   assert.equal(context.temporal_intent, "backfill_training_log");
 });
 
@@ -35,7 +35,7 @@ test("time context accepts selected date when text has no date term", () => {
     now
   });
   assert.equal(context.target_date, "2026-05-18");
-  assert.equal(context.target_date_label, "4 天后");
+  assert.equal(context.target_date_label, "2026-05-18");
   assert.equal(context.temporal_intent, "selected_date");
   assert.equal(context.date_source, "selected_date");
 });
@@ -47,7 +47,7 @@ test("time context classifies explicit past completed training as backfill", () 
     now
   });
   assert.equal(context.target_date, "2026-05-13");
-  assert.equal(context.target_date_label, "昨天");
+  assert.equal(context.target_date_label, "2026-05-13");
   assert.equal(context.date_source, "explicit_text");
   assert.equal(context.temporal_intent, "backfill_training_log");
 });

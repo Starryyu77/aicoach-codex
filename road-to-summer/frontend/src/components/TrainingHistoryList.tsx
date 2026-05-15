@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { deleteHistoryCard, getCurrentSession, getHistory, updateHistoryCard } from "../lib/api";
+import { historyCardKey } from "../lib/historyKeys";
 import type { SessionSnapshot, TrainingCard } from "../lib/types";
 import { TrainingCardView } from "./TrainingCardView";
 
@@ -22,7 +23,7 @@ export function TrainingHistoryList() {
     setCards((items) => items.filter((item) => item.id !== card.id));
   }
 
-  async function update(card: TrainingCard, patch: Partial<Pick<TrainingCard, "date" | "date_label" | "timezone" | "location" | "duration" | "theme">>) {
+  async function update(card: TrainingCard, patch: Partial<Pick<TrainingCard, "date" | "timezone" | "location" | "duration" | "theme">>) {
     if (!card.id) return;
     const updated = await updateHistoryCard(card.id, patch);
     setCards((items) => (
@@ -44,7 +45,7 @@ export function TrainingHistoryList() {
       <div className="mt-4 grid gap-4">
         {cards.length === 0 ? (
           <div className="rounded-lg bg-white p-5 text-sm text-[#536158] shadow-sm">还没有训练卡片。结束一次训练后会出现在这里。</div>
-        ) : cards.map((card) => <TrainingCardView card={card} key={card.id || `${card.date}-${card.theme}`} onDelete={remove} onUpdate={update} />)}
+        ) : cards.map((card, index) => <TrainingCardView card={card} key={historyCardKey(card, index)} onDelete={remove} onUpdate={update} />)}
       </div>
     </section>
   );

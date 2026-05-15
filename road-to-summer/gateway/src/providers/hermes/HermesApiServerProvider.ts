@@ -49,11 +49,11 @@ function parseChatCompletion(data: any): string {
   return JSON.stringify(data);
 }
 
-function buildAuthHeaders(apiKey?: string) {
+function buildAuthHeaders(apiKey?: string): Record<string, string> {
   return apiKey ? { authorization: `Bearer ${apiKey}` } : {};
 }
 
-function sessionHeaders(input: HermesMessage, apiKey?: string) {
+function sessionHeaders(input: HermesMessage, apiKey?: string): Record<string, string> {
   if (!apiKey) return {};
   const sessionId = input.current_session?.id;
   return {
@@ -80,13 +80,14 @@ export class HermesApiServerProvider implements HermesProvider {
       throw new Error(`Hermes endpointMode ${endpointMode} is not implemented yet.`);
     }
 
+    const headers: Record<string, string> = {
+      "content-type": "application/json",
+      ...buildAuthHeaders(apiKey),
+      ...sessionHeaders(input, apiKey)
+    };
     const response = await fetch(`${baseUrl.replace(/\/$/, "")}/chat/completions`, {
       method: "POST",
-      headers: {
-        "content-type": "application/json",
-        ...buildAuthHeaders(apiKey),
-        ...sessionHeaders(input, apiKey)
-      },
+      headers,
       body: JSON.stringify({
         model: this.instance.model || "hermes-agent",
         messages: [
@@ -95,6 +96,10 @@ export class HermesApiServerProvider implements HermesProvider {
             content: [
               "Use Road to Summer Skill Pack.",
               "All user-facing text must be Chinese, coach-like, and directly useful during training.",
+              "For every request, use HermesMessage.time_context.today and time_context.target_date as absolute YYYY-MM-DD dates. Compare those dates before deciding whether the user means past, present, or future.",
+              "Use absolute dates in saved data, UI-facing date fields, and primary plan/card explanations. Do not write relative date labels such as 今天, 明天, 昨天, or 前天 into plan_card.date_label, training_card.date_label, history cards, Markdown records, or plan/card headline explanations.",
+              "For every plan_patch, output a nested patch object. Never output plan_patch as only top-level patch_operation/reasoning/next_action/direction/adjustment_magnitude fields.",
+              "Map shorthand concepts into patch.operation, patch.reason, patch.next_instruction, and patch.to before returning JSON.",
               "For training_plan, do not invent a random exercise list; use exercise_selection_context and the chain target -> adaptation -> movement pattern -> candidate pool -> constraints -> role -> variables.",
               "Apply the five-framework bridge: ACE IFT for user context, NASM OPT for phase, NSCA Program Design for structure/load, ACSM 2026 Resistance Training for variables, and RPE/RIR Autoregulation for live adjustment.",
               "Include plan_card.framework_trace with concise framework decisions when returning a training_plan.",
@@ -138,12 +143,13 @@ export class HermesApiServerProvider implements HermesProvider {
     const baseUrl = (this.instance.baseUrl || "http://127.0.0.1:8642/v1").replace(/\/$/, "");
     const apiKey = await getSecret(this.instance.apiKeyRef, this.runtimeRoot);
     try {
+      const headers: Record<string, string> = {
+        accept: "application/json",
+        ...buildAuthHeaders(apiKey)
+      };
       const response = await fetch(`${baseUrl}/capabilities`, {
         method: "GET",
-        headers: {
-          accept: "application/json",
-          ...buildAuthHeaders(apiKey)
-        },
+        headers,
         signal: timeoutSignal(this.instance.timeoutMs, 8000)
       });
       const details = await response.json().catch(async () => ({ text: await response.text() }));
@@ -157,12 +163,13 @@ export class HermesApiServerProvider implements HermesProvider {
       };
     } catch (error) {
       try {
+        const headers: Record<string, string> = {
+          accept: "application/json",
+          ...buildAuthHeaders(apiKey)
+        };
         const response = await fetch(`${baseUrl}/models`, {
           method: "GET",
-          headers: {
-            accept: "application/json",
-            ...buildAuthHeaders(apiKey)
-          },
+          headers,
           signal: timeoutSignal(this.instance.timeoutMs, 8000)
         });
         const details = await response.json().catch(async () => ({ text: await response.text() }));

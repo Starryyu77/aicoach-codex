@@ -19,7 +19,7 @@ export function CurrentPlanCard({ plan, storagePath }: { plan?: PlanCard; storag
           <h2 className="text-lg font-semibold">当前计划</h2>
           <p className="mt-1 text-sm text-[#536158]">
             Hermes 返回的结构化计划，Gateway 会保存为本地 UI 状态。
-            {plan?.target_date ? ` 目标日期：${plan.date_label || ""} ${plan.target_date}` : ""}
+            {plan?.target_date ? ` 目标日期：${plan.target_date}` : ""}
           </p>
         </div>
         {storagePath ? <div className="rounded-md bg-[#eef2ec] px-2 py-1 font-mono text-[11px] text-[#536158]">{storagePath}</div> : null}

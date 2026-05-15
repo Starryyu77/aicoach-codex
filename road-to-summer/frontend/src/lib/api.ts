@@ -79,6 +79,14 @@ export function startSession(meta: { targetDate?: string; timezone?: string } = 
   });
 }
 
+export function resetSession(meta: { targetDate?: string; timezone?: string } = {}) {
+  return post<SessionSnapshot>("/session/reset", {
+    location: "公寓健身房",
+    target_date: meta.targetDate,
+    timezone: meta.timezone
+  });
+}
+
 export function getCurrentSession() {
   return get<SessionSnapshot>("/session/current");
 }
@@ -98,7 +106,7 @@ export function deleteHistoryCard(id: string) {
   return del<{ deleted: boolean; id: string; removed_paths: string[] }>(`/history/${id}`);
 }
 
-export function updateHistoryCard(id: string, patch: Partial<Pick<TrainingCard, "date" | "date_label" | "timezone" | "location" | "duration" | "theme">>) {
+export function updateHistoryCard(id: string, patch: Partial<Pick<TrainingCard, "date" | "timezone" | "location" | "duration" | "theme">>) {
   return put<TrainingCard>(`/history/${id}`, patch);
 }
 

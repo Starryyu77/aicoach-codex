@@ -5,8 +5,11 @@
     "moduleResolution": "NodeNext",
     "strict": true,
     "skipLibCheck": true,
+    "allowImportingTsExtensions": true,
+    "types": ["node"],
+    "typeRoots": ["../frontend/node_modules/@types"],
+    "lib": ["ES2022", "DOM"],
     "noEmit": true
   },
   "include": ["src/**/*.ts"]
 }
-

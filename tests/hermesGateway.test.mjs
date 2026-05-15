@@ -10,7 +10,7 @@ import { TestHermesClient } from "./support/TestHermesClient.ts";
 import { handleChat } from "../road-to-summer/gateway/src/routes/chat.ts";
 import { handleHistoryDelete, handleHistoryList, handleHistoryUpdate } from "../road-to-summer/gateway/src/routes/history.ts";
 import { handleMemoryConfirm, handleMemoryGet, handleMemoryRefresh } from "../road-to-summer/gateway/src/routes/memory.ts";
-import { handleGetCurrentSession, handleStartSession } from "../road-to-summer/gateway/src/routes/session.ts";
+import { handleEndSession, handleGetCurrentSession, handleResetSession, handleStartSession } from "../road-to-summer/gateway/src/routes/session.ts";
 import { handleVisionAssess } from "../road-to-summer/gateway/src/routes/vision.ts";
 import { handleVoiceTranscribe } from "../road-to-summer/gateway/src/routes/voice.ts";
 import { saveTrainingCard } from "../road-to-summer/gateway/src/storage/trainingCardStore.ts";
@@ -193,7 +193,7 @@ test("future date planning keeps absolute target date on plan and session", asyn
   assert.equal(result.hermes_output.type, "training_plan");
   assert.equal(result.hermes_output.plan_card.target_date, expected.target_date);
   assert.equal(result.ui.current_session.target_date, expected.target_date);
-  assert.equal(result.ui.current_session.target_date_label, "明天");
+  assert.equal(result.ui.current_session.target_date_label, expected.target_date);
 });
 
 test("plan generation persists the real Hermes plan without local quality rewrite", async () => {
@@ -263,6 +263,67 @@ test("plan patch updates persisted current exercise and current plan", async () 
   assert.equal(current.current_exercise, "胸托哑铃划船");
   assert.ok(current.current_plan.sections.some((section) => (
     section.items.some((item) => typeof item === "object" && item.exercise === "胸托哑铃划船")
+  )));
+});
+
+test("chat messages persist through session hydration and reset clears them", async () => {
+  const ctx = await context();
+  await handleStartSession(ctx, { location: "公寓健身房" });
+  await handleChat(ctx, { text: "帮我安排今天胸部训练，疲劳4分，无疼痛。" });
+  await handleChat(ctx, { text: "太轻了" });
+  const current = await handleGetCurrentSession(ctx);
+  assert.equal(current.chat_messages.length, 4);
+  assert.deepEqual(current.chat_messages.map((message) => message.role), ["user", "agent", "user", "agent"]);
+  assert.match(current.chat_messages[0].text, /胸部训练/);
+  assert.equal(current.chat_messages[2].text, "太轻了");
+
+  const reset = await handleResetSession(ctx, { location: "公寓健身房" });
+  assert.deepEqual(reset.chat_messages, []);
+});
+
+test("generic object-shaped plan patch modifies persisted current plan item", async () => {
+  const ctx = await context();
+  await handleStartSession(ctx, { location: "公寓健身房" });
+  await handleChat(ctx, { text: "今天该练什么？" });
+  const before = await handleGetCurrentSession(ctx);
+  const previousExercise = before.current_exercise;
+  ctx.providerRegistry.getHermesProvider = async () => ({
+    instance: {
+      id: "test-real-hermes",
+      type: "hermes-api-server",
+      label: "Test Hermes Provider"
+    },
+    sendMessage: async () => ({
+      output: {
+        type: "plan_patch",
+        chat_message: "已经把当前动作换成台阶上步。",
+        patch: {
+          operation: "swap_exercise",
+          target: "当前动作",
+          replacement: { exercise: "台阶上步" },
+          reason: "用户要求替换当前动作。",
+          instruction: "下一组做台阶上步，先用低台阶找稳定。"
+        },
+        quick_actions: ["开始台阶上步"]
+      },
+      raw: {},
+      provider: "hermes"
+    })
+  });
+  const result = await handleChat(ctx, { text: "把当前动作换成台阶上步" });
+  assert.equal(result.hermes_output.type, "plan_patch");
+  assert.equal(result.hermes_output.patch.operation, "replace_exercise");
+  assert.equal(result.hermes_output.patch.to, "台阶上步");
+  assert.ok(result.ui.current_plan.sections.some((section) => (
+    section.items.some((item) => typeof item === "object" && item.exercise === "台阶上步")
+  )));
+  assert.ok(result.ui.current_plan.sections.some((section) => (
+    section.items.some((item) => typeof item === "object" && item.substitutions?.includes(previousExercise))
+  )));
+  const current = await handleGetCurrentSession(ctx);
+  assert.equal(current.current_exercise, "台阶上步");
+  assert.ok(current.current_plan.sections.some((section) => (
+    section.items.some((item) => typeof item === "object" && item.exercise === "台阶上步")
   )));
 });
 
@@ -430,13 +491,49 @@ test("scenario 8: session end saves training card and history can list it", asyn
   assert.match(history[0].markdown, /## 原计划/);
 });
 
+test("session end clears active plan so refresh does not show ended plan dock", async () => {
+  const ctx = await context();
+  await handleStartSession(ctx, { location: "公寓健身房", target_date: "2026-05-15", timezone: "Asia/Singapore" });
+  await handleChat(ctx, { text: "今天该练什么？", target_date: "2026-05-15", timezone: "Asia/Singapore" });
+  const result = await handleEndSession(ctx, { target_date: "2026-05-15", timezone: "Asia/Singapore" });
+  assert.equal(result.hermes_output.type, "training_card");
+  const current = await handleGetCurrentSession(ctx);
+  assert.equal(current.phase, "ended");
+  assert.equal(current.current_plan, null);
+  assert.equal(current.plan_card, undefined);
+  assert.equal(current.current_exercise, undefined);
+});
+
+test("history list normalizes MiniMax training_card shape with completed_exercises", async () => {
+  const ctx = await context();
+  await saveTrainingCard({
+    date: "2026-05-15",
+    date_label: "今天",
+    timezone: "Asia/Singapore",
+    theme: "胸背训练",
+    duration: "40 分钟",
+    location: "公寓健身房",
+    completed_at: "2026-05-15T07:00:00.000Z",
+    completed_exercises: [
+      { exercise: "胸托哑铃划船", status: "completed", sets_completed: 4 }
+    ],
+    body_feedback: ["无疼痛"],
+    next_session_suggestions: ["下次检查肩前侧状态"]
+  }, ctx.stateRoot);
+  const history = await handleHistoryList(ctx);
+  assert.equal(history.length, 1);
+  assert.equal(history[0].actual_completed.length, 1);
+  assert.equal(history[0].actual_completed[0].exercise, "胸托哑铃划船");
+  assert.match(history[0].markdown, /胸托哑铃划船/);
+});
+
 test("backfilled training summary saves training card on target date", async () => {
   const ctx = await context();
   const result = await handleChat(ctx, { text: "前天练完了，帮我补一张训练卡。" });
   assert.equal(result.hermes_output.type, "training_card");
   assert.equal(result.ui.training_card.date, result.hermes_output.training_card.date);
-  assert.equal(result.ui.training_card.date_label, "前天");
-  assert.match(result.ui.training_card.markdown, /日期语义：前天/);
+  assert.equal(result.ui.training_card.date_label, undefined);
+  assert.doesNotMatch(result.ui.training_card.markdown, /日期语义/);
 });
 
 test("explicit text date overrides stale selected date for backfilled card", async () => {
@@ -448,7 +545,7 @@ test("explicit text date overrides stale selected date for backfilled card", asy
   });
   assert.equal(result.hermes_output.type, "training_card");
   assert.equal(result.ui.training_card.date, "2026-05-13");
-  assert.equal(result.ui.training_card.date_label, "昨天");
+  assert.equal(result.ui.training_card.date_label, undefined);
   assert.match(result.ui.training_card.markdown, /日期：2026-05-13/);
 });
 
@@ -496,16 +593,15 @@ test("history card update edits metadata and regenerates markdown", async () => 
   const card = result.ui.training_card;
   const updated = await handleHistoryUpdate(ctx, card.id, {
     date: "2026-05-12",
-    date_label: "2 天前",
     theme: "修正后的训练主题",
     location: "公寓健身房",
     duration: "50 分钟"
   });
   assert.equal(updated.date, "2026-05-12");
-  assert.equal(updated.date_label, "2 天前");
+  assert.equal(updated.date_label, undefined);
   assert.equal(updated.theme, "修正后的训练主题");
   assert.match(updated.markdown, /日期：2026-05-12/);
-  assert.match(updated.markdown, /日期语义：2 天前/);
+  assert.doesNotMatch(updated.markdown, /日期语义/);
   assert.match(updated.markdown, /^# 修正后的训练主题/);
 });
 

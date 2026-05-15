@@ -37,10 +37,22 @@ export type CurrentSession = {
   location?: string;
   phase?: "preworkout" | "warmup" | "main" | "accessory" | "cooldown" | "ended";
   current_exercise?: string;
+  current_item_id?: string;
   current_set?: number;
+  plan_id?: string;
+  plan_revision?: number;
   progress?: string;
+  chat_messages?: ChatMessage[];
   plan_card?: PlanCard;
   events?: unknown[];
+};
+
+export type ChatMessage = {
+  id?: string;
+  role: "user" | "agent";
+  text: string;
+  source?: InputSource;
+  created_at?: string;
 };
 
 export type HermesMessage = {
@@ -68,6 +80,7 @@ export type MemoryUpdate = {
 };
 
 export type PlanItem = {
+  item_id?: string;
   exercise: string;
   role?: string;
   movement_pattern?: string;
@@ -85,11 +98,14 @@ export type PlanItem = {
 };
 
 export type PlanSection = {
+  section_id?: string;
   name: string;
   items: Array<PlanItem | string>;
 };
 
 export type PlanCard = {
+  plan_id?: string;
+  plan_revision?: number;
   title: string;
   target_date?: string;
   date_label?: string;
@@ -128,7 +144,19 @@ export type PlanPatchOutput = {
   type: "plan_patch";
   chat_message: string;
   patch: {
-    operation: "replace_exercise" | "adjust_load" | "reduce_sets" | "add_set" | "extend_rest" | "end_session" | "update_cue";
+    operation:
+      | "replace_exercise"
+      | "adjust_load"
+      | "reduce_sets"
+      | "add_set"
+      | "extend_rest"
+      | "end_session"
+      | "update_cue"
+      | "continue_current";
+    target_item_id?: string;
+    target_section_id?: string;
+    applies_to_plan_id?: string;
+    applies_to_revision?: number;
     target_exercise: string;
     from?: string;
     to?: string;

@@ -12,7 +12,6 @@ export type DeleteTrainingCardResult = {
 
 export type UpdateTrainingCardInput = {
   date?: string;
-  date_label?: string;
   timezone?: string;
   location?: string;
   duration?: string;
@@ -40,16 +39,75 @@ function cleanText(value?: string): string | undefined {
   return String(value).trim();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null;
+}
+
+function text(value: unknown, fallback = ""): string {
+  if (typeof value === "string") return value.trim();
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return fallback;
+}
+
+function values(value: unknown): unknown[] {
+  return Array.isArray(value) ? value : [];
+}
+
+function normalizeTrainingCard(value: unknown): TrainingCard | null {
+  if (!isRecord(value)) return null;
+  if (value.type === "training_plan" && !value.completed_at && !value.training_card) return null;
+
+  const date = text(value.date);
+  const theme = text(value.theme || value.title, "训练记录");
+  const duration = text(value.duration, "");
+  const location = text(value.location, "公寓健身房");
+  const planned = values(value.planned).length
+    ? values(value.planned)
+    : values(value.plan || value.sections);
+  const actualCompleted = values(value.actual_completed).length
+    ? values(value.actual_completed)
+    : values(value.completed_exercises || value.completed_items);
+  const hasCompletionSignal = Boolean(value.completed_at) || actualCompleted.length > 0 || values(value.actual_completed).length > 0;
+
+  if (!date || !hasCompletionSignal) return null;
+
+  return {
+    ...value,
+    id: text(value.id) || undefined,
+    storage_path: text(value.storage_path) || undefined,
+    markdown_path: text(value.markdown_path) || undefined,
+    markdown: text(value.markdown) || undefined,
+    date,
+    timezone: text(value.timezone) || undefined,
+    date_label: undefined,
+    completed_at: text(value.completed_at) || undefined,
+    location,
+    duration,
+    theme,
+    planned,
+    actual_completed: actualCompleted,
+    adjustments: values(value.adjustments),
+    equipment_notes: values(value.equipment_notes),
+    body_feedback: values(value.body_feedback),
+    fatigue_notes: values(value.fatigue_notes),
+    pain_or_discomfort: values(value.pain_or_discomfort),
+    unfinished_items: values(value.unfinished_items),
+    next_session_suggestions: values(value.next_session_suggestions || value.next_actions).map((item) => text(item)).filter(Boolean)
+  };
+}
+
 async function withMarkdown(card: TrainingCard, jsonPath: string): Promise<TrainingCard> {
   const markdownPath = card.markdown_path || jsonPath.replace(/\.json$/, ".md");
+  const expectedMarkdown = createTrainingCardMarkdown(card);
   let markdown = card.markdown;
-  if (!markdown) {
-    try {
-      markdown = await readFile(markdownPath, "utf8");
-    } catch {
-      markdown = createTrainingCardMarkdown(card);
-      await writeFile(markdownPath, markdown, "utf8");
-    }
+  try {
+    markdown = markdown || await readFile(markdownPath, "utf8");
+  } catch {
+    markdown = "";
+  }
+  if (markdown !== expectedMarkdown) {
+    markdown = expectedMarkdown;
+    await writeFile(markdownPath, markdown, "utf8");
   }
   return {
     ...card,
@@ -67,14 +125,21 @@ function sortCards(cards: TrainingCard[]): TrainingCard[] {
   });
 }
 
+function isTrainingCard(value: unknown): value is TrainingCard {
+  return normalizeTrainingCard(value) !== null;
+}
+
 export async function saveTrainingCard(card: TrainingCard, stateRoot?: string): Promise<TrainingCard> {
   const paths = getStorePaths(stateRoot);
   await ensureStateDirs(paths);
-  const id = card.id || `card-${Date.now()}`;
+  const normalized = normalizeTrainingCard(card);
+  if (!normalized) throw new Error("Invalid training card shape.");
+  const id = normalized.id || `card-${Date.now()}`;
   const filePath = path.join(paths.trainingCardsDir, `${id}.json`);
   const markdownPath = path.join(paths.trainingCardsDir, `${id}.md`);
-  const markdown = card.markdown || createTrainingCardMarkdown({ ...card, id, storage_path: filePath, markdown_path: markdownPath });
-  const saved = { ...card, id, storage_path: filePath, markdown_path: markdownPath, markdown };
+  const savedBase = { ...normalized, id, storage_path: filePath, markdown_path: markdownPath };
+  const markdown = createTrainingCardMarkdown(savedBase);
+  const saved = { ...savedBase, markdown };
   await writeJson(filePath, saved);
   await writeFile(markdownPath, markdown, "utf8");
   return saved;
@@ -89,7 +154,18 @@ export async function listTrainingCards(stateRoot?: string): Promise<TrainingCar
       names.map(async (name) => {
         const filePath = path.join(paths.trainingCardsDir, name);
         const card = await readJson<TrainingCard | null>(filePath, null);
-        return card ? withMarkdown(card, filePath) : null;
+        const normalized = normalizeTrainingCard(card);
+        if (!normalized) return null;
+        const withPaths = {
+          ...normalized,
+          storage_path: normalized.storage_path || filePath,
+          markdown_path: normalized.markdown_path || filePath.replace(/\.json$/, ".md")
+        };
+        if (!isTrainingCard(withPaths)) return null;
+        await writeJson(filePath, withPaths);
+        const updated = await withMarkdown(withPaths, filePath);
+        await writeJson(filePath, updated);
+        return updated;
       })
     );
     return sortCards(cards.filter((card): card is TrainingCard => card !== null));
@@ -104,7 +180,11 @@ export async function getTrainingCard(id: string, stateRoot?: string): Promise<T
   await ensureStateDirs(paths);
   const filePath = path.join(paths.trainingCardsDir, `${safeId}.json`);
   const card = await readJson<TrainingCard | null>(filePath, null);
-  return card ? withMarkdown(card, filePath) : null;
+  const normalized = normalizeTrainingCard(card);
+  if (!normalized) return null;
+  const updated = await withMarkdown(normalized, filePath);
+  await writeJson(filePath, updated);
+  return updated;
 }
 
 export async function deleteTrainingCard(id: string, stateRoot?: string): Promise<DeleteTrainingCardResult> {
@@ -143,10 +223,10 @@ export async function updateTrainingCard(id: string, patch: UpdateTrainingCardIn
     storage_path: filePath,
     markdown_path: path.join(paths.trainingCardsDir, `${safeId}.md`),
     date: assertIsoDate(patch.date) || existing.date,
-    date_label: patch.date_label !== undefined ? cleanText(patch.date_label) : existing.date_label,
+    date_label: undefined,
     timezone: patch.timezone !== undefined ? cleanText(patch.timezone) : existing.timezone,
     location: patch.location !== undefined ? cleanText(patch.location) || existing.location : existing.location,
-    duration: patch.duration !== undefined ? cleanText(patch.duration) : existing.duration,
+    duration: patch.duration !== undefined ? cleanText(patch.duration) || "" : existing.duration || "",
     theme: patch.theme !== undefined ? cleanText(patch.theme) || existing.theme : existing.theme
   };
   next.markdown = createTrainingCardMarkdown(next);

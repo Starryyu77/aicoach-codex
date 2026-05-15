@@ -92,7 +92,7 @@ function addSetDecisionOutput(input: HermesMessage): HermesOutput {
     type: "plan_patch",
     chat_message: [
       `你问要不要给 **${exercise}** 加组，我不会只看“还有力气”。`,
-      "如果上一组动作质量稳定、没有疼痛、目标肌肉还有感觉，而且今天主训练还没超量，可以加 1 组。",
+      "如果上一组动作质量稳定、没有疼痛、目标肌肉还有感觉，而且目标日期主训练还没超量，可以加 1 组。",
       "如果只是觉得不累但动作已经开始代偿，先不加组，改成把下一组做慢一点、做标准。"
     ].join("\n\n"),
     patch: {
@@ -171,14 +171,14 @@ function reviewOutput(input: HermesMessage): HermesOutput {
   return {
     type: "training_review",
     chat_message: picked.length
-      ? `已按 ${input.time_context.target_date_label}（${targetDate}）和最近训练记录做复盘，没有新增训练卡。`
+      ? `已按 ${targetDate} 和最近训练记录做复盘，没有新增训练卡。`
       : "当前没有可复盘的训练卡片。先补录或完成一次训练后再复盘。",
     review_card: {
       title: picked.length ? "训练复盘" : "训练复盘：暂无记录",
       date_range: {
         from: picked.at(-1)?.date,
         to: picked[0]?.date,
-        label: targetMatches.length ? input.time_context.target_date_label : "最近训练"
+        label: targetMatches.length ? targetDate : "最近训练"
       },
       scope: targetMatches.length ? "single_day" : "recent_series",
       referenced_cards: picked.map((card) => card.id || card.date),
@@ -195,11 +195,11 @@ function trainingCardOutput(input: HermesMessage): HermesOutput {
   const time = input.time_context;
   return {
     type: "training_card",
-    chat_message: `已生成 ${time.target_date_label}（${time.target_date}）的训练卡片。`,
+    chat_message: `已生成 ${time.target_date} 的训练卡片。`,
     training_card: {
       date: time.target_date,
       timezone: time.timezone,
-      date_label: time.target_date_label,
+      date_label: undefined,
       completed_at: time.now_iso,
       location: input.current_session.location || "公寓健身房",
       duration: "",
@@ -224,6 +224,10 @@ function outputForText(input: HermesMessage): HermesOutput {
   const text = input.raw_text;
   const time = input.time_context;
 
+  if (/练完|训练结束|结束训练|训练完成/.test(text) || time.temporal_intent === "backfill_training_log") {
+    return trainingCardOutput(input);
+  }
+
   if (/(复盘|回顾|分析|看看).*(训练|记录)|(?:前几天|这几天|最近|某一天|5月\d{1,2}日|20\d{2}-\d{1,2}-\d{1,2}).*(训练|记录).*(复盘|总结|回顾|分析)/.test(text)) {
     return reviewOutput(input);
   }
@@ -235,13 +239,13 @@ function outputForText(input: HermesMessage): HermesOutput {
     const plan = defaultPlan(input);
     return {
       type: "training_plan",
-      chat_message: `${time.target_date_label}（${time.target_date}）已按动作选择流程生成：${plan.title}。计划已经整理成卡片。`,
+      chat_message: `${time.target_date} 已按动作选择流程生成：${plan.title}。计划已经整理成卡片。`,
       plan_card: plan,
       quick_actions: QUICK_ACTIONS
     };
   }
 
-  if (/练完|训练结束|总结|补录|回填|补.*训练|前天.*练|两天前.*练|前两天.*练/.test(text) || time.temporal_intent === "backfill_training_log") {
+  if (/总结|补录|回填|补.*训练|前天.*练|两天前.*练|前两天.*练/.test(text)) {
     return trainingCardOutput(input);
   }
 
@@ -281,7 +285,7 @@ function outputForText(input: HermesMessage): HermesOutput {
   if (/高位下拉.*坏|高位下拉.*不能用/.test(text)) {
     return {
       type: "plan_patch",
-      chat_message: "高位下拉今天不能用，先不改变背部训练目标，改用胸托哑铃划船或单臂哑铃划船。",
+      chat_message: "高位下拉在目标日期不能用，先不改变背部训练目标，改用胸托哑铃划船或单臂哑铃划船。",
       patch: {
         operation: "replace_exercise",
         target_exercise: "高位下拉",

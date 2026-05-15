@@ -40,7 +40,7 @@
 ## In-session
 
 1. Receive text, voice transcript, quick action, or movement assessment.
-2. Read `time_context`; resolve "今天 / 明天 / 昨天 / 前天" before deciding workflow.
+2. Read `time_context`; compare absolute `today` and `target_date` before deciding workflow. Relative words are only parsing clues, not saved labels.
 3. Build current session context.
 4. Classify event.
 5. Adjust in priority order from `framework_autoregulation.md`: technique/cue, load, reps, rest, sets, exercise substitution, session type, session end.
@@ -52,7 +52,7 @@
 1. Resolve the session date from `time_context.target_date`.
 2. Summarize planned vs actual.
 3. Include adjustments, equipment notes, body feedback, fatigue, pain, unfinished items.
-4. Return `training_card` JSON with `date`, `date_label`, `timezone`, and `completed_at`.
+4. Return `training_card` JSON with absolute `date`, `timezone`, and `completed_at`.
 5. Include Hermes Memory update candidates.
 
 ## Historical Review
@@ -70,7 +70,8 @@
 - "昨天 / 前天 / 两天前 / 前两天" plus "补 / 记录 / 总结 / 练完 / 练了 / 做了 / 完成了" means backfilled `training_card`.
 - Explicit dates such as "5月13日" or "2026-05-13" must be resolved through `time_context.target_date`.
 - If `time_context.date_conflict` exists, user text wins over stale UI/session dates.
-- Do not use the model's hidden current date. Use the absolute date already provided by Gateway.
+- Do not use the model's hidden current date. Use the absolute `today` and `target_date` already provided by Gateway.
+- Do not write "今天", "明天", "昨天", or "前天" into saved plan/card/history date fields or Markdown. Store and display absolute dates.
 
 ## Product / Competitor Discussion
 

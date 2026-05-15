@@ -507,7 +507,7 @@ function officialSourceTrace(context: ExerciseSelectionContext, mode: "standard"
       source_location: "ACE IFT 模型页面：强调从用户能力、环境、信心、偏好和坚持度出发做训练进阶。",
       principle: "计划要从用户当下可执行的条件出发，而不是照搬模板。",
       applied_decision: isRecovery
-        ? "今天准备度有限，所以训练保持简单可执行，不强行做复杂分化。"
+        ? "目标日期准备度有限，所以训练保持简单可执行，不强行做复杂分化。"
         : "本次计划优先选择公寓健身房可重复、可记录的动作。",
       why_it_matters: "这样计划更像真实教练按你当下条件安排，而不是套模板。"
     },
@@ -519,7 +519,7 @@ function officialSourceTrace(context: ExerciseSelectionContext, mode: "standard"
       source_location: "NASM OPT 模型页面：训练阶段从稳定耐力、力量耐力、肌肉发展到最大力量和爆发力逐步推进。",
       principle: "先判断训练阶段，再决定强度；状态或技术不够时先回到稳定和控制。",
       applied_decision: isRecovery
-        ? "今天不适合硬做高刺激增肌，所以回退到稳定、控制和恢复。"
+        ? "目标日期不适合硬做高刺激增肌，所以回退到稳定、控制和恢复。"
         : `本次计划偏向 ${context.target_adaptation}，不做最大力量或爆发力取向。`,
       why_it_matters: "这解释了为什么先选训练阶段，而不是只选一个身体部位。"
     },
@@ -543,7 +543,7 @@ function officialSourceTrace(context: ExerciseSelectionContext, mode: "standard"
       source_location: "ACSM 2026 抗阻训练指南更新：力量、肌肥大、爆发力和身体功能等结果需要匹配训练变量，并强调个体化和一致性。",
       principle: "把目标结果映射到重量、训练量、休息、速度意图和可持续执行。",
       applied_decision: isRecovery
-        ? "今天目标是恢复和身体功能，所以强度和训练量都控制得更低。"
+        ? "目标日期的训练目标是恢复和身体功能，所以强度和训练量都控制得更低。"
         : `本次组数、次数、RPE 和休息都服务于 ${context.target_adaptation}。`,
       why_it_matters: "这让训练变量和训练目标直接对应，而不是随便写。"
     },
@@ -563,9 +563,9 @@ function officialSourceTrace(context: ExerciseSelectionContext, mode: "standard"
 function recoveryPlan(input: HermesMessage, context: ExerciseSelectionContext): PlanCard {
   const time = input.time_context;
   return withPlanSourceNotes({
-    title: `${time.target_date_label || "今天"}恢复与功能维护`,
+    title: `${time.target_date} 恢复与功能维护`,
     target_date: time.target_date,
-    date_label: time.target_date_label,
+    date_label: undefined,
     timezone: time.timezone,
     duration: "25-40 分钟",
     goal: context.target_adaptation,
@@ -592,7 +592,7 @@ function recoveryPlan(input: HermesMessage, context: ExerciseSelectionContext): 
     risk_notes: context.constraints,
     reasoning: [
       "动作选择流程：目标 -> 目标适应 -> 动作模式 -> 候选动作 -> 个体过滤 -> 动作角色。",
-      `今天判断为 ${context.target_adaptation}，因此不追求高刺激，优先活动度、核心控制和低强度心肺。`
+      `${time.target_date} 判断为 ${context.target_adaptation}，因此不追求高刺激，优先活动度、核心控制和低强度心肺。`
     ].join("\n"),
     framework_trace: [
       "ACE IFT: 根据用户当前疲劳/睡眠/疼痛语义优先保证可执行性和安全边界。",
@@ -731,9 +731,9 @@ export function composePlanFromExerciseSelection(input: HermesMessage): PlanCard
   ];
 
   return withPlanSourceNotes({
-    title: `${time.target_date_label || "今天"}${titleByFocus[focus]}`,
+    title: `${time.target_date} ${titleByFocus[focus]}`,
     target_date: time.target_date,
-    date_label: time.target_date_label,
+    date_label: undefined,
     timezone: time.timezone,
     duration: "45-60 分钟",
     goal: context.target_adaptation,

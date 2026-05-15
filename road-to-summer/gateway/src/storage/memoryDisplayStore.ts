@@ -49,7 +49,7 @@ function memoryItems(values: string[] = [], source: string): MemoryDisplayItem[]
 
 function recentTrainingItems(cards: TrainingCard[]): MemoryDisplayItem[] {
   return cards.slice(0, 3).map((card) => ({
-    label: `${card.date}${card.date_label ? ` · ${card.date_label}` : ""} · ${card.theme}`,
+    label: `${card.date} · ${card.theme}`,
     detail: [
       firstTexts(card.body_feedback, 1)[0] ? `身体反馈：${firstTexts(card.body_feedback, 1)[0]}` : "",
       firstTexts(card.next_session_suggestions, 1)[0] ? `下次建议：${firstTexts(card.next_session_suggestions, 1)[0]}` : ""
@@ -115,17 +115,18 @@ export async function refreshMemoryDisplay(reason = "manual", stateRoot?: string
     listTrainingCards(stateRoot),
     getCurrentSession(stateRoot)
   ]);
+  const trainingDirectionItems: Array<MemoryDisplayItem | undefined> = [
+    { label: memory.user_goal, detail: "长期训练目标", source: "user_goal" },
+    session.target_date ? { label: `${session.target_date}`, detail: session.theme || "当前 session", source: session.id || "current_session" } : undefined,
+    cards[0] ? { label: `${cards[0].date} ${cards[0].theme}`, detail: "最近训练卡", source: cards[0].id || "latest_training_card" } : undefined
+  ];
 
   const sections: MemoryDisplaySection[] = [
     {
       id: "training_direction",
       title: "当前训练方向",
       description: "来自用户目标、当前 session 和最近一次训练。",
-      items: [
-        { label: memory.user_goal, detail: "长期训练目标", source: "user_goal" },
-        session.target_date ? { label: `${session.target_date_label || "目标日期"} ${session.target_date}`, detail: session.theme || "当前 session", source: session.id || "current_session" } : undefined,
-        cards[0] ? { label: `${cards[0].date} ${cards[0].theme}`, detail: "最近训练卡", source: cards[0].id || "latest_training_card" } : undefined
-      ].filter((item): item is MemoryDisplayItem => Boolean(item))
+      items: trainingDirectionItems.filter((item): item is MemoryDisplayItem => Boolean(item))
     },
     {
       id: "recent_training",

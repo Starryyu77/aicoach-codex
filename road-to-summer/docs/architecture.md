@@ -104,16 +104,19 @@ Gateway owns date normalization before calling Hermes:
 - `timezone`
 - `today`
 - `target_date`
-- `target_date_label`
+- `target_date_label` as an absolute `YYYY-MM-DD` compatibility field
 - `target_offset_days`
 - `temporal_intent`
+- `date_source`
+- optional `date_conflict`
 - `mentioned_terms`
 
 Rules:
 
-- 明天 / 后天：默认生成未来 `training_plan`。
-- 昨天 / 前天 / 两天前 + 补录 / 总结 / 练完：生成对应日期的 `training_card`。
-- Gateway 在保存前补齐或修正 `plan_card.target_date` 与 `training_card.date`，避免真实 Hermes 把补录内容存到错误日期。
+- 前端主路径只让用户选择具体 `YYYY-MM-DD` 日期；相对词只作为自然语言输入中的解析线索。
+- Hermes 收到 `time_context.today` 和 `time_context.target_date` 后，必须先比较这两个绝对日期，再判断是当前训练、未来计划、补录记录还是历史复盘。
+- UI-facing fields、历史卡片和 Markdown 记录只保存绝对日期，不保存“今天 / 明天 / 昨天 / 前天”这类相对标签。
+- Gateway 在保存前补齐或修正 `plan_card.target_date` 与 `training_card.date`，并丢弃 `date_label`，避免真实 Hermes 把补录内容存到错误日期。
 
 ## Provider Layer
 

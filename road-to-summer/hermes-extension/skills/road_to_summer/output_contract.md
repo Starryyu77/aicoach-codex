@@ -11,7 +11,7 @@ The frontend may render a dynamic UI from `ui.agent_ui`, but the current first v
   "timezone": "Asia/Singapore",
   "today": "2026-05-14",
   "target_date": "2026-05-15",
-  "target_date_label": "明天",
+  "target_date_label": "2026-05-15",
   "temporal_intent": "future_planning",
   "date_source": "relative_text"
 }
@@ -22,6 +22,8 @@ The frontend may render a dynamic UI from `ui.agent_ui`, but the current first v
 - If `time_context.date_conflict` exists, follow its `resolution` and mention the resolved date in `chat_message`.
 - For future planning, output `training_plan`; do not create a completed training card.
 - For backfilled training logs, output `training_card` and set `training_card.date` to `time_context.target_date`.
+- Treat `time_context.today` and `time_context.target_date` as absolute `YYYY-MM-DD` facts. Compare those dates before deciding whether the request is past, present, or future.
+- Do not write relative labels such as `今天`, `明天`, `昨天`, or `前天` into `plan_card.date_label`, `training_card.date_label`, history cards, generated Markdown, or primary plan/card headline explanations. If a label field is required, use the absolute date or leave it empty.
 
 Before producing the final JSON, classify the input:
 
