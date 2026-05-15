@@ -19,7 +19,8 @@ export async function getCurrentSession(stateRoot?: string): Promise<CurrentSess
     goal: "",
     location: "公寓健身房",
     current_set: 1,
-    events: []
+    events: [],
+    recent_event_ids: []
   });
   return {
     timezone: timeContext.timezone,
@@ -69,7 +70,8 @@ export async function startSession(partial: Partial<CurrentSession> = {}, stateR
     goal: partial.goal || "",
     location: partial.location || "公寓健身房",
     current_set: 1,
-    events: []
+    events: [],
+    recent_event_ids: []
   };
   return saveCurrentSession(session, stateRoot);
 }

@@ -169,6 +169,134 @@ npm run build --prefix road-to-summer/frontend -> passed
 git diff --check -> clean
 ```
 
+## 2026-05-15 Contract / State Convergence Pass
+
+Applied the first slice of the external dev review: keep Hermes as the coaching brain and make Road to Summer Gateway a deterministic adapter / validator / state applier.
+
+Implemented:
+
+- Added the contract envelope fields to Gateway types and Skill contract:
+  - `schema_version`
+  - `contract_version`
+  - `turn_id`
+  - `event_id`
+  - `session_id`
+  - `idempotency_key`
+  - `state_before`
+  - `state_delta`
+  - `state_after`
+- Added stable plan state identifiers:
+  - `plan_id`
+  - `plan_revision`
+  - `section_id`
+  - `item_id`
+  - `current_item_id`
+- Added deterministic plan-state helpers in `gateway/src/state/planState.ts`.
+- Changed plan patch application to prefer `target_item_id` before falling back to exercise-name matching.
+- Added stale revision protection: if Hermes returns a `plan_patch` for an old `applies_to_revision`, Gateway rejects it instead of guessing.
+- Removed Gateway-side preference extraction from `/chat`; preference memory updates now need to come from Hermes output as `memory_updates`.
+- Updated frontend types and Training Cockpit lookup so the current action can follow `current_item_id`.
+- Updated CurrentPlanCard keys to prefer `section_id` / `item_id`.
+- Made Gateway TypeScript checking possible by enabling `.ts` import extensions and Node types in the Gateway `tsconfig`.
+
+Verification:
+
+```text
+npm test -> 78 passed, 0 failed
+npm run build --prefix road-to-summer/frontend -> passed
+road-to-summer/frontend/node_modules/.bin/tsc -p road-to-summer/gateway/tsconfig.json --noEmit -> passed
+```
+
+Remaining review actions:
+
+- Reduce `buildHermesMessage.ts` prompt duplication further so methodology and coaching rules live mostly in the Skill Pack.
+- Split `routes/chat.ts` into turn service, Hermes client, state applier, and memory candidate service.
+- Replace `getMockMemory` naming and display cache with a non-authoritative Memory Bridge that talks to Hermes Memory.
+- Refactor `TrainingCockpit` into current-action-first components: CurrentActionPanel, PlanTimeline, CoachTurnPanel, InputDock, MemoryCandidateDrawer, ProviderStatusBanner.
+
+## 2026-05-15 Complex Input Review
+
+Added an executable complex-input review suite:
+
+```text
+tests/complexInputReview.test.mjs
+road-to-summer/docs/complex_input_review_2026-05-15.md
+```
+
+Covered scenarios:
+
+- Risk signal vs load progression:
+  - `这个重量太轻了，但肩前侧有点顶，能不能加一点？`
+  - Expected: do not simply increase load; risk/cue/substitution logic wins.
+- Equipment occupied + dumbbell-only + target-muscle feedback:
+  - `高位下拉和绳索划船都有人了，我现在只有哑铃，而且刚才感觉不到背。`
+  - Expected: preserve back-training goal and replace with dumbbell rowing option.
+- Backfill + future planning mixed:
+  - `前天练了腿还没记录，明天想别再练腿，先帮我把前天保存。`
+  - Initial finding: test Hermes treated `明天` as future planning.
+  - Fix: `先保存/先记录` past-session backfill now wins and outputs `training_card`.
+- Preference contradiction:
+  - `我之前说不喜欢波比跳和高强度 HIIT，但其实现在挺喜欢的，之后可以安排。`
+  - Expected: `memory_updates` use `operation: replace`.
+- Completed sets + mild instability:
+  - `前三组做完了，肩膀还好，但最后两次有点晃，下一步做什么？`
+  - Expected: Hermes `session_update` can drive `current_set/current_item_id`.
+
+Skill / prompt changes:
+
+- Added compound-input priority to `output_contract.md`:
+  1. pain/red-flag/joint instability
+  2. equipment/location constraints
+  3. completed-set/current-action state updates
+  4. load progression or extra-set requests
+  5. technique cue/target-muscle feedback
+  6. general conversation
+- Added the same conflict-resolution instruction to Gateway Hermes message construction and Hermes API Server provider prompt.
+
+Verification:
+
+```text
+npm test -> 83 passed, 0 failed
+road-to-summer/frontend/node_modules/.bin/tsc -p road-to-summer/gateway/tsconfig.json --noEmit -> passed
+git diff --check -> clean
+```
+
+Remaining risk:
+
+- This pass verifies the contract and Gateway path with a test Hermes client. It does not prove real Hermes + MiniMax generation quality. Next useful step is to run the same five prompts against the real configured Hermes provider and store raw JSON/UI snapshots as golden fixtures.
+
+## 2026-05-15 Real Hermes Shorthand Repair
+
+Ran the same five complex inputs against the real local Hermes provider:
+
+```text
+.runtime/real-hermes-complex-review/review-2026-05-15T01-48-01-978Z.json
+```
+
+Finding:
+
+- Real Hermes handled 3/5 scenarios through the strict contract.
+- 2/5 failed at Gateway validation because Hermes returned `plan_patch` shorthand with top-level fields such as `patch_operation`, `reasoning`, `next_action`, `direction`, and `adjustment_magnitude` instead of the required nested `patch` object.
+
+Fix:
+
+- `parseHermesResponse` now defensively repairs real Hermes `plan_patch` shorthand into the canonical nested `patch` object.
+- The repair maps:
+  - `patch_operation` -> `patch.operation`
+  - `reasoning` -> `patch.reason`
+  - `next_action` -> `patch.next_instruction`
+  - `direction` + `adjustment_magnitude` -> `patch.to`
+- The repair uses `当前动作` only as a structural target fallback when Hermes omits a target; it does not generate local coach content.
+- `output_contract.md`, `buildHermesMessage.ts`, and `HermesApiServerProvider.ts` now explicitly forbid top-level `plan_patch` shorthand and require nested `patch`.
+
+Verification:
+
+```text
+npm test -> 84 passed, 0 failed
+road-to-summer/frontend/node_modules/.bin/tsc -p road-to-summer/gateway/tsconfig.json --noEmit -> passed
+git diff --check -> clean
+```
+
 ## 2026-05-14 Training Session Flow Follow-up
 
 Fixed the live training cockpit feedback loop after testing the user flow:
@@ -239,6 +367,44 @@ npm test -> 74 passed, 0 failed
 npm run build --prefix road-to-summer/frontend -> passed
 npm run dx:smoke -> 5 passed, 0 failed
 Live providers: hermes:local-hermes, asr:doubao-asr-flash, vision:mock-vision
+```
+
+## 2026-05-14 External Dev Review Processed
+
+Received and processed the external development review. Files added:
+
+```text
+handoffs/incoming/2026-05-14-road-to-summer-dev-review.md
+road-to-summer/docs/dev_review_action_plan_2026-05-14.md
+```
+
+Accepted main diagnosis:
+
+```text
+The project direction is right, but Gateway must not become a second hidden Agent.
+```
+
+Accepted next-step priority:
+
+1. Do not expand features first.
+2. Start with contract and state consistency.
+3. Add stable IDs, revisions, event IDs, idempotency, `state_before`, `state_delta`, and `state_after`.
+4. Replace string-name patch matching with ID-based patch targets.
+5. Keep Gateway as deterministic adapter / validator / state applier.
+6. Move final coaching decisions and long-term memory semantics back toward Hermes.
+7. Refactor cockpit only after Phase 1 state foundation is stable.
+
+Immediate next implementation slice:
+
+```text
+Phase 1: Contract and State Foundation
+- schema_version / contract_version
+- turn_id / event_id / session_id / idempotency_key
+- plan_id / section_id / item_id / plan_revision
+- applies_to_revision
+- state_before / state_delta / state_after
+- ID-based patch application
+- stale revision and duplicate event tests
 ```
   - `这个动作我不会做` -> `update_cue`.
   - `有点晃/不稳` -> stabilization cue.

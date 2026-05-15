@@ -46,7 +46,7 @@ export async function listJsonFiles<T>(dirPath: string): Promise<T[]> {
     const values = await Promise.all(
       jsonNames.map((name) => readJson<T | null>(path.join(dirPath, name), null))
     );
-    return values.filter((value): value is T => value !== null);
+    return values.filter((value) => value !== null) as T[];
   } catch {
     return [];
   }

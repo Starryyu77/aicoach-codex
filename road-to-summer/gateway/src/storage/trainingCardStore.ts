@@ -142,11 +142,11 @@ export async function updateTrainingCard(id: string, patch: UpdateTrainingCardIn
     id: safeId,
     storage_path: filePath,
     markdown_path: path.join(paths.trainingCardsDir, `${safeId}.md`),
-    date: assertIsoDate(patch.date) || existing.date,
+    date: patch.date !== undefined ? assertIsoDate(patch.date)! : existing.date,
     date_label: patch.date_label !== undefined ? cleanText(patch.date_label) : existing.date_label,
     timezone: patch.timezone !== undefined ? cleanText(patch.timezone) : existing.timezone,
     location: patch.location !== undefined ? cleanText(patch.location) || existing.location : existing.location,
-    duration: patch.duration !== undefined ? cleanText(patch.duration) : existing.duration,
+    duration: patch.duration !== undefined ? cleanText(patch.duration) ?? existing.duration : existing.duration,
     theme: patch.theme !== undefined ? cleanText(patch.theme) || existing.theme : existing.theme
   };
   next.markdown = createTrainingCardMarkdown(next);

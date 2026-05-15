@@ -28,12 +28,12 @@ export function CurrentPlanCard({ plan, storagePath }: { plan?: PlanCard; storag
         <p className="mt-3 text-sm text-[#536158]">点击“生成今日计划”后，Hermes 会返回结构化训练计划卡片。</p>
       ) : (
         <div className="mt-4 grid gap-4">
-          {plan.sections.map((section) => (
-            <div key={section.name}>
+          {plan.sections.map((section, sectionIndex) => (
+            <div key={section.section_id || `${section.name}-${sectionIndex}`}>
               <h3 className="text-sm font-semibold text-[#1f7a5a]">{section.name}</h3>
               <div className="mt-2 overflow-hidden rounded-md border border-[#e0e7df]">
                 {section.items.map((item, index) => {
-                  const key = `${section.name}-${index}-${itemLabel(item)}`;
+                  const key = isPlanItem(item) && item.item_id ? item.item_id : `${section.section_id || section.name}-${index}-${itemLabel(item)}`;
                   if (!isPlanItem(item)) {
                     return (
                       <div className="border-b border-[#e0e7df] bg-[#fbfcfa] p-3 last:border-b-0" key={key}>

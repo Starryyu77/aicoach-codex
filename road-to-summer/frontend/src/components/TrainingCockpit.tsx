@@ -100,8 +100,10 @@ export function TrainingCockpit() {
 
   const currentItem = useMemo(() => {
     const planItems = plan?.sections.flatMap((section) => section.items).filter(isPlanItem) || [];
-    return planItems.find((item) => item.exercise === currentExercise) || planItems[0];
-  }, [plan, currentExercise]);
+    return planItems.find((item) => item.item_id && item.item_id === session?.current_item_id) ||
+      planItems.find((item) => item.exercise === currentExercise) ||
+      planItems[0];
+  }, [plan, currentExercise, session?.current_item_id]);
 
   useEffect(() => {
     getCurrentSession()

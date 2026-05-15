@@ -36,16 +36,27 @@ export type CurrentSession = {
   goal?: string;
   location?: string;
   phase?: "preworkout" | "warmup" | "main" | "accessory" | "cooldown" | "ended";
+  plan_id?: string;
+  plan_revision?: number;
+  current_item_id?: string;
   current_exercise?: string;
   current_set?: number;
   progress?: string;
   plan_card?: PlanCard;
   events?: unknown[];
+  recent_event_ids?: string[];
 };
 
 export type HermesMessage = {
   source: InputSource;
   raw_text: string;
+  event?: TrainingEvent;
+  contract?: {
+    schema_version: "rts.agent_output.v1";
+    contract_version: string;
+    expected_output_type?: "training_plan" | "plan_patch" | "training_card" | "training_review";
+  };
+  state_before?: TrainingStateSnapshot;
   time_context: TimeContext;
   current_session: CurrentSession;
   recent_training_cards?: TrainingCard[];
@@ -56,6 +67,7 @@ export type HermesMessage = {
 };
 
 export type MemoryUpdate = {
+  candidate_id?: string;
   target: "Hermes Memory";
   content: string;
   reason: string;
@@ -67,7 +79,55 @@ export type MemoryUpdate = {
   remove_values?: string[];
 };
 
+export type TrainingStateSnapshot = {
+  session_id?: string;
+  plan_id?: string;
+  plan_revision?: number;
+  current_item_id?: string;
+  current_exercise?: string;
+  current_set?: number;
+  session_phase?: CurrentSession["phase"];
+  target_date?: string;
+  timestamp?: string;
+};
+
+export type TrainingStateDelta = {
+  operations: Array<{
+    type: string;
+    target_item_id?: string;
+    target_section_id?: string;
+    from?: unknown;
+    to?: unknown;
+    reason?: string;
+  }>;
+};
+
+export type TrainingEvent = {
+  event_id: string;
+  idempotency_key: string;
+  source: InputSource;
+  raw_text: string;
+  normalized_text?: string;
+  intent_hint?: "training_plan" | "plan_patch" | "training_card" | "training_review";
+  target_date?: string;
+  timestamp: string;
+  state_before?: TrainingStateSnapshot;
+};
+
+export type AgentOutputEnvelope = {
+  schema_version?: "rts.agent_output.v1";
+  contract_version?: string;
+  turn_id?: string;
+  event_id?: string;
+  session_id?: string;
+  idempotency_key?: string;
+  state_before?: TrainingStateSnapshot;
+  state_delta?: TrainingStateDelta;
+  state_after?: TrainingStateSnapshot;
+};
+
 export type PlanItem = {
+  item_id?: string;
   exercise: string;
   role?: string;
   movement_pattern?: string;
@@ -85,11 +145,14 @@ export type PlanItem = {
 };
 
 export type PlanSection = {
+  section_id?: string;
   name: string;
   items: Array<PlanItem | string>;
 };
 
 export type PlanCard = {
+  plan_id?: string;
+  plan_revision?: number;
   title: string;
   target_date?: string;
   date_label?: string;
@@ -117,19 +180,23 @@ export type OfficialSourceTrace = {
   why_it_matters: string;
 };
 
-export type TrainingPlanOutput = {
+export type TrainingPlanOutput = AgentOutputEnvelope & {
   type: "training_plan";
   chat_message: string;
   plan_card: PlanCard;
   quick_actions: string[];
 };
 
-export type PlanPatchOutput = {
+export type PlanPatchOutput = AgentOutputEnvelope & {
   type: "plan_patch";
   chat_message: string;
   patch: {
     operation: "replace_exercise" | "adjust_load" | "reduce_sets" | "add_set" | "extend_rest" | "end_session" | "update_cue";
     target_exercise: string;
+    target_item_id?: string;
+    target_section_id?: string;
+    applies_to_plan_id?: string;
+    applies_to_revision?: number;
     from?: string;
     to?: string;
     reason: string;
@@ -163,14 +230,14 @@ export type TrainingCard = {
   next_session_suggestions: string[];
 };
 
-export type TrainingCardOutput = {
+export type TrainingCardOutput = AgentOutputEnvelope & {
   type: "training_card";
   chat_message: string;
   training_card: TrainingCard;
   memory_updates: MemoryUpdate[];
 };
 
-export type TrainingReviewOutput = {
+export type TrainingReviewOutput = AgentOutputEnvelope & {
   type: "training_review";
   chat_message: string;
   review_card: {

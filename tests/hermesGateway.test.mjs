@@ -58,6 +58,25 @@ test("scenario 1: preworkout plan returns training_plan and quick actions", asyn
   assert.match(current.storage.current_plan, /current_plan\.json$/);
 });
 
+test("training plan output is enriched with contract metadata and stable IDs", async () => {
+  const ctx = await context();
+  await handleStartSession(ctx, { location: "公寓健身房" });
+  const result = await handleChat(ctx, { text: "今天该练什么？", event_id: "evt-test-plan-ids" });
+  assert.equal(result.hermes_output.schema_version, "rts.agent_output.v1");
+  assert.equal(result.hermes_output.event_id, "evt-test-plan-ids");
+  assert.ok(result.hermes_output.plan_card.plan_id);
+  assert.equal(result.hermes_output.plan_card.plan_revision, 1);
+  assert.ok(result.hermes_output.state_before);
+  assert.ok(result.hermes_output.state_after);
+  const sections = result.hermes_output.plan_card.sections;
+  assert.ok(sections.every((section) => section.section_id));
+  const items = sections.flatMap((section) => section.items).filter((item) => typeof item === "object");
+  assert.ok(items.length > 0);
+  assert.ok(items.every((item) => item.item_id));
+  assert.equal(result.ui.current_session.plan_id, result.hermes_output.plan_card.plan_id);
+  assert.equal(result.ui.current_session.current_item_id, items[0].item_id);
+});
+
 test("plan generation uses explicit exercise selection context and item roles", async () => {
   const ctx = await context();
   await handleStartSession(ctx, { location: "公寓健身房" });
@@ -266,6 +285,85 @@ test("plan patch updates persisted current exercise and current plan", async () 
   )));
 });
 
+test("plan patch targets item_id before exercise-name fallback", async () => {
+  const ctx = await context();
+  await handleStartSession(ctx, { location: "公寓健身房" });
+  await handleChat(ctx, { text: "帮我安排今天胸部训练，疲劳4分，无疼痛。" });
+  const current = await handleGetCurrentSession(ctx);
+  const plan = current.current_plan;
+  const item = plan.sections.flatMap((section) => section.items).find((candidate) => typeof candidate === "object");
+  assert.ok(item.item_id);
+  ctx.providerRegistry.getHermesProvider = async () => ({
+    instance: {
+      id: "test-real-hermes",
+      type: "hermes-api-server",
+      label: "Test Hermes Provider"
+    },
+    sendMessage: async () => ({
+      output: {
+        type: "plan_patch",
+        chat_message: "按当前动作位更新 cue。",
+        patch: {
+          operation: "update_cue",
+          target_exercise: "不存在的动作名",
+          target_item_id: item.item_id,
+          applies_to_plan_id: plan.plan_id,
+          applies_to_revision: plan.plan_revision,
+          reason: "测试 ID 优先命中。",
+          next_instruction: "ID 命中后的新 cue。"
+        },
+        quick_actions: ["完成本组"]
+      },
+      raw: {},
+      provider: "hermes"
+    })
+  });
+  const result = await handleChat(ctx, { text: "这个动作 cue 要更新" });
+  const updatedItem = result.ui.current_plan.sections
+    .flatMap((section) => section.items)
+    .find((candidate) => typeof candidate === "object" && candidate.item_id === item.item_id);
+  assert.equal(updatedItem.cue, "ID 命中后的新 cue。");
+  assert.equal(result.ui.current_plan.plan_revision, plan.plan_revision + 1);
+  assert.equal(result.ui.current_session.current_item_id, item.item_id);
+  assert.equal(result.hermes_output.patch.target_item_id, item.item_id);
+  assert.equal(result.hermes_output.state_after.current_item_id, item.item_id);
+});
+
+test("stale plan patch revision is rejected before applying state", async () => {
+  const ctx = await context();
+  await handleStartSession(ctx, { location: "公寓健身房" });
+  await handleChat(ctx, { text: "帮我安排今天胸部训练，疲劳4分，无疼痛。" });
+  const current = await handleGetCurrentSession(ctx);
+  const plan = current.current_plan;
+  const item = plan.sections.flatMap((section) => section.items).find((candidate) => typeof candidate === "object");
+  ctx.providerRegistry.getHermesProvider = async () => ({
+    instance: {
+      id: "test-real-hermes",
+      type: "hermes-api-server",
+      label: "Test Hermes Provider"
+    },
+    sendMessage: async () => ({
+      output: {
+        type: "plan_patch",
+        chat_message: "这个补丁基于旧版本。",
+        patch: {
+          operation: "update_cue",
+          target_exercise: item.exercise,
+          target_item_id: item.item_id,
+          applies_to_plan_id: plan.plan_id,
+          applies_to_revision: 0,
+          reason: "测试旧 revision。",
+          next_instruction: "不应该被应用。"
+        },
+        quick_actions: []
+      },
+      raw: {},
+      provider: "hermes"
+    })
+  });
+  await assert.rejects(() => handleChat(ctx, { text: "应用旧 patch" }), /Stale plan patch/);
+});
+
 test("Hermes session_update drives current exercise state", async () => {
   const ctx = await context();
   ctx.providerRegistry.getHermesProvider = async () => ({
@@ -441,6 +539,10 @@ test("backfilled training summary saves training card on target date", async () 
 
 test("explicit text date overrides stale selected date for backfilled card", async () => {
   const ctx = await context();
+  const expected = buildTimeContext({
+    rawText: "5月13日我练了下肢，帮我记录一下。",
+    timezone: "Asia/Singapore"
+  });
   const result = await handleChat(ctx, {
     text: "5月13日我练了下肢，帮我记录一下。",
     target_date: "2026-05-11",
@@ -448,7 +550,7 @@ test("explicit text date overrides stale selected date for backfilled card", asy
   });
   assert.equal(result.hermes_output.type, "training_card");
   assert.equal(result.ui.training_card.date, "2026-05-13");
-  assert.equal(result.ui.training_card.date_label, "昨天");
+  assert.equal(result.ui.training_card.date_label, expected.target_date_label);
   assert.match(result.ui.training_card.markdown, /日期：2026-05-13/);
 });
 

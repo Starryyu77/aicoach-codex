@@ -110,7 +110,7 @@ export function coachPlanMessage(message: string, plan: PlanCard): string {
   const firstMain = plan.sections
     .flatMap((section) => section.items)
     .find((item) => isPlanItem(item) && item.role === "main");
-  const exercise = isPlanItem(firstMain) ? firstMain.exercise : "主训练动作";
+  const exercise = firstMain && isPlanItem(firstMain) ? firstMain.exercise : "主训练动作";
   return [
     message,
     "",

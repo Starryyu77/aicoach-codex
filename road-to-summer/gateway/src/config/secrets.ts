@@ -59,7 +59,7 @@ export async function setSecret(ref: string, value: string, runtimeRoot = defaul
   if (!safeRef) throw new Error("Secret ref is required.");
   const filePath = secretsFilePath(runtimeRoot);
   await mkdir(path.dirname(filePath), { recursive: true });
-  const current = await readFile(filePath, "utf8").then(parseEnv).catch(() => ({}));
+  const current = await readFile(filePath, "utf8").then(parseEnv).catch((): Record<string, string> => ({}));
   current[safeRef] = value;
   await writeFile(filePath, serializeEnv(current), "utf8");
 }

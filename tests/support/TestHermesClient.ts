@@ -149,6 +149,36 @@ function unstableMovementOutput(input: HermesMessage): HermesOutput {
   };
 }
 
+function riskSignalOutput(input: HermesMessage): HermesOutput {
+  const exercise = currentExerciseName(input);
+  return {
+    type: "plan_patch",
+    chat_message: [
+      `先不急着给 **${exercise}** 加重量。`,
+      "你同时提到了肩前侧不舒服或顶住的感觉，这比“重量偏轻”优先级更高。",
+      "下一组先维持或小幅降重，缩小动作幅度，把肩胛稳定找回来；如果疼痛变尖锐、麻木或关节不稳，就停止这个动作并换更安全的替代。"
+    ].join("\n\n"),
+    patch: {
+      operation: "update_cue",
+      target_exercise: exercise,
+      from: currentIntensity(input),
+      to: "维持或小幅降重，优先处理肩前侧不适",
+      reason: "用户同时反馈想加重和肩前侧不适，风险信号优先于负荷进阶。",
+      next_instruction: "下一组不要加重量；肩胛先稳定，动作幅度缩小一点。若肩前侧仍顶住或疼痛，停止该动作并更换替代动作。"
+    },
+    quick_actions: QUICK_ACTIONS
+  };
+}
+
+function hasRiskSignal(text: string): boolean {
+  const negated = /无疼|无痛|无不适|没有疼|没有痛|没有不适|没有任何酸痛|不疼|不痛/.test(text);
+  return !negated && /(肩前侧|肩膀|疼|痛|不舒服|顶住|顶着|卡|麻|胸闷|头晕)/.test(text);
+}
+
+function asksForProgression(text: string): boolean {
+  return /(太轻|偏轻|加重|加一点|加重量|加组|再来一组|继续加|还能做很多|还有余力)/.test(text);
+}
+
 function reviewOutput(input: HermesMessage): HermesOutput {
   const cards = input.recent_training_cards || [];
   const targetDate = input.time_context.target_date;
@@ -229,6 +259,13 @@ function outputForText(input: HermesMessage): HermesOutput {
   }
 
   if (
+    /练完|训练结束|总结|补录|回填|补.*训练|前天.*练|两天前.*练|前两天.*练|先.*(?:保存|记录)/.test(text) ||
+    time.temporal_intent === "backfill_training_log"
+  ) {
+    return trainingCardOutput(input);
+  }
+
+  if (
     /该练什么|今天训练|明天.*训练|明天.*练|后天.*训练|后天.*练|帮我安排|训练计划|今天想练|想练(?:胸|背|腿|肩|下肢|上肢)|今天.*练(?:胸|背|腿|肩|下肢|上肢)/.test(text) ||
     time.temporal_intent === "future_planning"
   ) {
@@ -241,11 +278,26 @@ function outputForText(input: HermesMessage): HermesOutput {
     };
   }
 
-  if (/练完|训练结束|总结|补录|回填|补.*训练|前天.*练|两天前.*练|前两天.*练/.test(text) || time.temporal_intent === "backfill_training_log") {
-    return trainingCardOutput(input);
-  }
-
   if (/(不太喜欢|不喜欢|不爱|讨厌|不想做|默认避免|挺喜欢|很喜欢|喜欢|可以接受|愿意做|想做|不是不喜欢|没有不喜欢)/.test(text)) {
+    const preferenceUpdates = [];
+    if (/波比跳/.test(text)) {
+      preferenceUpdates.push(memoryUpdate("将训练偏好更新为：喜欢波比跳。", "用户明确表达了喜欢或纠正了旧的不喜欢偏好，需要替换旧偏好。", {
+        category: "preference",
+        operation: "replace",
+        key: "波比跳",
+        value: "喜欢波比跳",
+        remove_values: ["不喜欢波比跳"]
+      }));
+    }
+    if (/HIIT|高强度/.test(text)) {
+      preferenceUpdates.push(memoryUpdate("将训练偏好更新为：喜欢高强度 HIIT。", "用户明确表达了喜欢或纠正了旧的不喜欢偏好，需要替换旧偏好。", {
+        category: "preference",
+        operation: "replace",
+        key: "高强度 HIIT",
+        value: "喜欢高强度 HIIT",
+        remove_values: ["不喜欢高强度 HIIT；如确有价值需先解释"]
+      }));
+    }
     return {
       type: "plan_patch",
       chat_message: "我已识别这是训练偏好更新。会先作为待确认 Memory 更新展示，确认后再替换旧偏好。",
@@ -255,7 +307,8 @@ function outputForText(input: HermesMessage): HermesOutput {
         reason: "用户表达了训练偏好变化。",
         next_instruction: "请到 Memory 展示层确认这条偏好更新；确认后后续计划会按新偏好生成。"
       },
-      quick_actions: QUICK_ACTIONS
+      quick_actions: QUICK_ACTIONS,
+      memory_updates: preferenceUpdates
     };
   }
 
@@ -311,6 +364,10 @@ function outputForText(input: HermesMessage): HermesOutput {
       },
       quick_actions: QUICK_ACTIONS
     };
+  }
+
+  if (hasRiskSignal(text) && asksForProgression(text)) {
+    return riskSignalOutput(input);
   }
 
   if (/太轻|太轻松|太简单|没什么重量|重量不够|还能做很多|还有余力/.test(text)) {

@@ -5,6 +5,117 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
 }
 
+function stringField(source: Record<string, unknown>, keys: string[]): string | undefined {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "string" && value.trim()) return value;
+  }
+  return undefined;
+}
+
+function numberField(source: Record<string, unknown>, keys: string[]): number | undefined {
+  for (const key of keys) {
+    const value = source[key];
+    if (typeof value === "number" && Number.isFinite(value)) return value;
+    if (typeof value === "string" && value.trim() && Number.isFinite(Number(value))) return Number(value);
+  }
+  return undefined;
+}
+
+function adjustmentToText(source: Record<string, unknown>): string | undefined {
+  const explicit = stringField(source, ["to", "new_value", "target_value"]);
+  if (explicit) return explicit;
+
+  const direction = stringField(source, ["direction"]);
+  const magnitude = stringField(source, ["adjustment_magnitude", "magnitude", "amount"]);
+  if (!direction && !magnitude) return undefined;
+
+  const directionLabel =
+    direction === "increase"
+      ? "增加"
+      : direction === "decrease"
+        ? "降低"
+        : direction === "hold" || direction === "maintain"
+          ? "保持"
+          : direction;
+  return [directionLabel, magnitude].filter(Boolean).join(" ");
+}
+
+function normalizePatchOperation(operation?: string) {
+  if (!operation) return undefined;
+  const normalizedOperation = operation.trim();
+  const aliasKey = normalizedOperation.toLowerCase();
+  const aliases: Record<string, string> = {
+    load_adjustment: "adjust_load",
+    adjust_weight: "adjust_load",
+    change_load: "adjust_load",
+    swap_exercise: "replace_exercise",
+    substitute_exercise: "replace_exercise",
+    substitution: "replace_exercise",
+    replacement: "replace_exercise",
+    cue_update: "update_cue",
+    form_cue: "update_cue",
+    technique_cue: "update_cue",
+    rest_extension: "extend_rest",
+    extend_recovery: "extend_rest",
+    finish_session: "end_session",
+    stop_session: "end_session"
+  };
+  return aliases[aliasKey] || normalizedOperation;
+}
+
+function normalizePlanPatch(output: Record<string, unknown>): unknown | undefined {
+  if (output.type === "plan_patch" && isObject(output.patch)) return output;
+
+  const shorthandPatch = isObject(output.plan_patch)
+    ? output.plan_patch
+    : isObject(output.patch)
+      ? output.patch
+      : output;
+
+  const operation = normalizePatchOperation(
+    stringField(shorthandPatch, ["operation", "patch_operation", "action", "action_type"])
+  );
+  const reason = stringField(shorthandPatch, ["reason", "reasoning", "decision_reason", "why"]);
+  const nextInstruction = stringField(shorthandPatch, [
+    "next_instruction",
+    "next_action",
+    "instruction",
+    "recommendation",
+    "coach_instruction"
+  ]);
+
+  if (!operation || !reason || !nextInstruction) return undefined;
+
+  const targetExercise =
+    stringField(shorthandPatch, ["target_exercise", "exercise", "current_exercise", "target"]) || "当前动作";
+
+  return {
+    ...output,
+    type: "plan_patch",
+    chat_message: typeof output.chat_message === "string" ? output.chat_message : nextInstruction,
+    patch: {
+      operation,
+      target_exercise: targetExercise,
+      target_item_id: stringField(shorthandPatch, ["target_item_id", "item_id"]),
+      target_section_id: stringField(shorthandPatch, ["target_section_id", "section_id"]),
+      applies_to_plan_id: stringField(shorthandPatch, ["applies_to_plan_id", "plan_id"]),
+      applies_to_revision: numberField(shorthandPatch, ["applies_to_revision", "plan_revision"]),
+      from: stringField(shorthandPatch, ["from", "old_value", "previous_value"]),
+      to: adjustmentToText(shorthandPatch),
+      reason,
+      next_instruction: nextInstruction
+    },
+    quick_actions: Array.isArray(output.quick_actions) ? output.quick_actions : [],
+    memory_updates: Array.isArray(output.memory_updates) ? output.memory_updates : undefined,
+    session_update: isObject(output.session_update)
+      ? output.session_update
+      : isObject(shorthandPatch.session_update)
+        ? shorthandPatch.session_update
+        : undefined
+  };
+}
+
 function extractJson(text: string): unknown {
   const trimmed = text.trim().replace(/^```(?:json)?/i, "").replace(/```$/, "").trim();
   const candidates = [
@@ -37,6 +148,10 @@ function extractJson(text: string): unknown {
 
 function normalizeHermesOutput(output: unknown): unknown {
   if (!isObject(output)) return output;
+  if (output.type === "plan_patch") {
+    const normalizedPatch = normalizePlanPatch(output);
+    if (normalizedPatch) return normalizedPatch;
+  }
   if (typeof output.type === "string") return output;
 
   const wrappers = ["hermes_output", "output", "result", "response", "data"] as const;
@@ -48,41 +163,8 @@ function normalizeHermesOutput(output: unknown): unknown {
     }
   }
 
-  const shorthandPatch = isObject(output.plan_patch)
-    ? output.plan_patch
-    : isObject(output.patch)
-      ? output.patch
-      : output;
-  const operation = shorthandPatch.operation;
-  const targetExercise = shorthandPatch.target_exercise;
-  const reason = shorthandPatch.reason;
-  const nextInstruction = shorthandPatch.next_instruction;
-  if (
-    typeof operation === "string" &&
-    typeof targetExercise === "string" &&
-    typeof reason === "string" &&
-    typeof nextInstruction === "string"
-  ) {
-    return {
-      type: "plan_patch",
-      chat_message: typeof output.chat_message === "string" ? output.chat_message : nextInstruction,
-      patch: {
-        operation,
-        target_exercise: targetExercise,
-        from: typeof shorthandPatch.from === "string" ? shorthandPatch.from : undefined,
-        to: typeof shorthandPatch.to === "string" ? shorthandPatch.to : undefined,
-        reason,
-        next_instruction: nextInstruction
-      },
-      quick_actions: Array.isArray(output.quick_actions) ? output.quick_actions : [],
-      memory_updates: Array.isArray(output.memory_updates) ? output.memory_updates : undefined,
-      session_update: isObject(output.session_update)
-        ? output.session_update
-        : isObject(shorthandPatch.session_update)
-          ? shorthandPatch.session_update
-          : undefined
-    };
-  }
+  const normalizedPatch = normalizePlanPatch(output);
+  if (normalizedPatch) return normalizedPatch;
 
   if (isObject(output.training_plan)) {
     return {

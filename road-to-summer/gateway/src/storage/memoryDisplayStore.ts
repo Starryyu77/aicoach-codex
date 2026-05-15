@@ -121,11 +121,11 @@ export async function refreshMemoryDisplay(reason = "manual", stateRoot?: string
       id: "training_direction",
       title: "当前训练方向",
       description: "来自用户目标、当前 session 和最近一次训练。",
-      items: [
+      items: ([
         { label: memory.user_goal, detail: "长期训练目标", source: "user_goal" },
         session.target_date ? { label: `${session.target_date_label || "目标日期"} ${session.target_date}`, detail: session.theme || "当前 session", source: session.id || "current_session" } : undefined,
         cards[0] ? { label: `${cards[0].date} ${cards[0].theme}`, detail: "最近训练卡", source: cards[0].id || "latest_training_card" } : undefined
-      ].filter((item): item is MemoryDisplayItem => Boolean(item))
+      ] as Array<MemoryDisplayItem | undefined>).filter((item): item is MemoryDisplayItem => Boolean(item))
     },
     {
       id: "recent_training",

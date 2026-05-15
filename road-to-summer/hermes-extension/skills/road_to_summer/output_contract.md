@@ -6,11 +6,65 @@ Every request includes `time_context`. Treat it as the only source of truth for 
 
 The frontend may render a dynamic UI from `ui.agent_ui`, but the current first version does not require Hermes to generate arbitrary UI JSON directly. Hermes should return the domain JSON below. The Gateway compiles that domain JSON into an A2UI-inspired `AgentUiDocument` using a strict component allowlist.
 
+## Contract Envelope
+
+All outputs should include a lightweight state envelope when the fields are available. The Gateway can fill missing fields, but Hermes should preserve IDs and revisions sent in `current_session`, `state_before`, and the current plan.
+
+```json
+{
+  "schema_version": "rts.agent_output.v1",
+  "contract_version": "2026-05-15",
+  "turn_id": "turn_...",
+  "event_id": "evt_...",
+  "session_id": "session_...",
+  "idempotency_key": "evt_...",
+  "state_before": {
+    "session_id": "session_...",
+    "plan_id": "plan_...",
+    "plan_revision": 3,
+    "current_item_id": "plan_...-item-...",
+    "current_exercise": "哑铃卧推",
+    "current_set": 2,
+    "session_phase": "main",
+    "target_date": "2026-05-15"
+  },
+  "state_delta": {
+    "operations": [
+      {
+        "type": "adjust_load",
+        "target_item_id": "plan_...-item-...",
+        "from": "RPE 6",
+        "to": "RPE 7",
+        "reason": "用户反馈太轻且动作稳定"
+      }
+    ]
+  },
+  "state_after": {
+    "session_id": "session_...",
+    "plan_id": "plan_...",
+    "plan_revision": 4,
+    "current_item_id": "plan_...-item-...",
+    "current_exercise": "哑铃卧推",
+    "current_set": 2,
+    "session_phase": "main",
+    "target_date": "2026-05-15"
+  }
+}
+```
+
+Rules:
+
+- `plan_id`, `section_id`, `item_id`, and `plan_revision` are state identifiers, not user-facing coaching content.
+- A `plan_patch` must target `target_item_id` when the current plan contains item IDs. `target_exercise` is kept only as a readable fallback.
+- A `plan_patch` should include `applies_to_plan_id` and `applies_to_revision`. If the Gateway receives a stale revision, it must reject the patch instead of guessing.
+- Replacing an exercise keeps the same `item_id`; the slot changed, not the identity of the plan item in the UI timeline.
+- Gateway may compile this domain output into UI, but Hermes remains responsible for the coaching decision.
+
 ```json
 {
   "timezone": "Asia/Singapore",
-  "today": "2026-05-14",
-  "target_date": "2026-05-15",
+  "today": "2026-05-15",
+  "target_date": "2026-05-16",
   "target_date_label": "明天",
   "temporal_intent": "future_planning",
   "date_source": "relative_text"
@@ -49,6 +103,8 @@ All user-facing text in `training_plan` must be Chinese and coach-like. Do not m
   "type": "training_plan",
   "chat_message": "",
   "plan_card": {
+    "plan_id": "plan_...",
+    "plan_revision": 1,
     "title": "",
     "target_date": "",
     "date_label": "",
@@ -57,13 +113,16 @@ All user-facing text in `training_plan` must be Chinese and coach-like. Do not m
     "goal": "",
     "sections": [
       {
+        "section_id": "sec_...",
         "name": "热身",
         "items": []
       },
       {
+        "section_id": "sec_...",
         "name": "主训练",
         "items": [
           {
+            "item_id": "item_...",
             "exercise": "",
             "role": "main",
             "movement_pattern": "",
@@ -139,6 +198,14 @@ Do not paste long copyrighted text from official sources. Summarize the principl
 
 Use `plan_patch` for training-session dialogue. The user can speak in normal language; Hermes should infer the intent from `raw_text`, `current_session`, current exercise, current plan, and risk context.
 
+Hard structural rule:
+
+- Every `plan_patch` response must contain a nested `patch` object.
+- Do not put `patch_operation`, `reasoning`, `next_action`, `direction`, or `adjustment_magnitude` as the only top-level patch fields.
+- If you need those concepts, map them into `patch.operation`, `patch.reason`, `patch.next_instruction`, and `patch.to`.
+- A top-level shorthand such as `{ "type": "plan_patch", "patch_operation": "...", "reasoning": "...", "next_action": "..." }` is invalid for Road to Summer UI.
+- The Gateway may repair this invalid shape defensively, but Hermes should never intentionally output it.
+
 Do not answer with a generic taxonomy prompt such as:
 
 ```text
@@ -153,6 +220,10 @@ Instead, map the sentence to a concrete training action and tell the user the ne
   "chat_message": "",
   "patch": {
     "operation": "replace_exercise | adjust_load | reduce_sets | add_set | extend_rest | end_session | update_cue",
+    "target_item_id": "",
+    "target_section_id": "",
+    "applies_to_plan_id": "",
+    "applies_to_revision": 1,
     "target_exercise": "",
     "from": "",
     "to": "",
@@ -164,7 +235,56 @@ Instead, map the sentence to a concrete training action and tell the user the ne
 }
 ```
 
+Invalid `plan_patch` shape:
+
+```json
+{
+  "type": "plan_patch",
+  "patch_operation": "adjust_load",
+  "reasoning": "用户反馈太轻。",
+  "next_action": "下一组加 5%。"
+}
+```
+
+Correct `plan_patch` shape:
+
+```json
+{
+  "type": "plan_patch",
+  "chat_message": "可以微调，但先看动作质量。下一组只加 5%，如果姿势变形就退回原重量。",
+  "patch": {
+    "operation": "adjust_load",
+    "target_item_id": "item_...",
+    "target_exercise": "当前动作",
+    "from": "当前重量",
+    "to": "增加 5%",
+    "reason": "用户反馈太轻，且未报告疼痛或动作质量下降。",
+    "next_instruction": "下一组只加 5%，保持动作轨迹；如果最后两次明显晃动，立刻退回原重量。"
+  },
+  "quick_actions": ["完成本组", "太轻了", "太重了", "有点疼"]
+}
+```
+
 `memory_updates` is optional for ordinary patches, but required when the patch comes from a long-term equipment, risk, location, or preference update.
+
+When one user sentence contains multiple signals, resolve conflicts explicitly instead of following the easiest keyword:
+
+```text
+priority:
+1. red-flag symptoms / pain / joint instability
+2. equipment unavailable or location constraint
+3. completed set / current action state update
+4. load progression or extra-set request
+5. technique cue or target-muscle feedback
+6. general conversation
+```
+
+Examples:
+
+- `这个重量太轻了，但肩前侧有点顶，能不能加一点？` -> do not simply increase load. Treat shoulder discomfort as higher priority; output `update_cue`, `adjust_load` downward/hold, or substitution if needed.
+- `高位下拉有人了，我现在只有哑铃，而且感觉不到背` -> preserve the back-training goal, choose a dumbbell replacement, and include a cue that helps the user feel the target area.
+- `前三组做完了，最后两次有点晃` -> update the current set state if appropriate, but do not progress load until movement quality is stable.
+- `前天练了腿还没记录，明天想别再练腿，先帮我把前天保存` -> because the user explicitly says "先保存", output a `training_card` for the past session first. Put the future-planning concern into `next_session_suggestions`; do not silently turn it into a future `training_plan`.
 
 Common in-session language mapping:
 

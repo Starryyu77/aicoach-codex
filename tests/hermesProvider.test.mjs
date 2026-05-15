@@ -107,6 +107,31 @@ test("parseHermesResponse wraps nested Hermes plan_patch object", () => {
   assert.equal(output.session_update.current_exercise, "全身活动度循环");
 });
 
+test("parseHermesResponse repairs real Hermes top-level plan_patch shorthand", () => {
+  const output = parseHermesResponse({
+    provider: "hermes",
+    raw: {},
+    output: JSON.stringify({
+      type: "plan_patch",
+      session_id: "debug-session",
+      timestamp: "2026-05-15T01:00:00.000Z",
+      patch_operation: "adjust_load",
+      direction: "increase",
+      adjustment_magnitude: "5-10%",
+      reasoning: "用户反馈太轻，但动作质量稳定。",
+      next_action: "下一组先增加 5%，如果动作变形就退回原重量。",
+      warning_if_any: null
+    })
+  });
+  assert.equal(output.type, "plan_patch");
+  assert.equal(output.chat_message, "下一组先增加 5%，如果动作变形就退回原重量。");
+  assert.equal(output.patch.operation, "adjust_load");
+  assert.equal(output.patch.target_exercise, "当前动作");
+  assert.equal(output.patch.to, "增加 5-10%");
+  assert.equal(output.patch.reason, "用户反馈太轻，但动作质量稳定。");
+  assert.equal(output.patch.next_instruction, "下一组先增加 5%，如果动作变形就退回原重量。");
+});
+
 test("parseHermesResponse unwraps common Hermes wrapper keys", () => {
   const output = parseHermesResponse({
     provider: "hermes",
