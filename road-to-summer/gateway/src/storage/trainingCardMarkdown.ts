@@ -1,4 +1,5 @@
 import type { TrainingCard } from "../hermes/types.ts";
+import { replaceRelativeDateLabels } from "../time/absoluteDateText.ts";
 
 function text(value: unknown): string {
   if (value === undefined || value === null || value === "") return "";
@@ -7,26 +8,26 @@ function text(value: unknown): string {
   return JSON.stringify(value);
 }
 
-function exerciseLine(value: unknown): string {
-  if (typeof value !== "object" || value === null) return text(value);
+function exerciseLine(value: unknown, baseDate?: string): string {
+  if (typeof value !== "object" || value === null) return replaceRelativeDateLabels(text(value), baseDate);
   const item = value as Record<string, unknown>;
-  const name = text(item.exercise || item.name || item.operation || item.target_exercise || "项目");
+  const name = replaceRelativeDateLabels(text(item.exercise || item.name || item.operation || item.target_exercise || "项目"), baseDate);
   const details = [
-    item.status ? `状态：${text(item.status)}` : "",
-    item.sets ? `组数：${text(item.sets)}` : "",
-    item.reps ? `次数：${text(item.reps)}` : "",
-    item.intensity ? `强度：${text(item.intensity)}` : "",
-    item.rest ? `休息：${text(item.rest)}` : "",
-    item.from || item.to ? `调整：${text(item.from)} -> ${text(item.to)}` : "",
-    item.reason ? `原因：${text(item.reason)}` : "",
-    item.note ? `备注：${text(item.note)}` : ""
+    item.status ? `状态：${replaceRelativeDateLabels(text(item.status), baseDate)}` : "",
+    item.sets ? `组数：${replaceRelativeDateLabels(text(item.sets), baseDate)}` : "",
+    item.reps ? `次数：${replaceRelativeDateLabels(text(item.reps), baseDate)}` : "",
+    item.intensity ? `强度：${replaceRelativeDateLabels(text(item.intensity), baseDate)}` : "",
+    item.rest ? `休息：${replaceRelativeDateLabels(text(item.rest), baseDate)}` : "",
+    item.from || item.to ? `调整：${replaceRelativeDateLabels(text(item.from), baseDate)} -> ${replaceRelativeDateLabels(text(item.to), baseDate)}` : "",
+    item.reason ? `原因：${replaceRelativeDateLabels(text(item.reason), baseDate)}` : "",
+    item.note ? `备注：${replaceRelativeDateLabels(text(item.note), baseDate)}` : ""
   ].filter(Boolean);
   return details.length ? `**${name}**：${details.join("；")}` : `**${name}**`;
 }
 
-function listSection(title: string, values: unknown[] = []): string {
+function listSection(title: string, values: unknown[] = [], baseDate?: string): string {
   if (!values.length) return `## ${title}\n\n- 无`;
-  return [`## ${title}`, "", ...values.map((value) => `- ${exerciseLine(value)}`)].join("\n");
+  return [`## ${title}`, "", ...values.map((value) => `- ${exerciseLine(value, baseDate)}`)].join("\n");
 }
 
 export function createTrainingCardMarkdown(card: TrainingCard): string {
@@ -39,22 +40,22 @@ export function createTrainingCardMarkdown(card: TrainingCard): string {
     `- 场地：${card.location || ""}`,
     `- 时长：${card.duration || "未记录"}`,
     "",
-    listSection("原计划", card.planned),
+    listSection("原计划", card.planned, card.date),
     "",
-    listSection("实际完成", card.actual_completed),
+    listSection("实际完成", card.actual_completed, card.date),
     "",
-    listSection("临时调整", card.adjustments),
+    listSection("临时调整", card.adjustments, card.date),
     "",
-    listSection("身体反馈", card.body_feedback),
+    listSection("身体反馈", card.body_feedback, card.date),
     "",
-    listSection("疲劳反馈", card.fatigue_notes),
+    listSection("疲劳反馈", card.fatigue_notes, card.date),
     "",
-    listSection("疼痛 / 不适", card.pain_or_discomfort),
+    listSection("疼痛 / 不适", card.pain_or_discomfort, card.date),
     "",
-    listSection("器械情况", card.equipment_notes),
+    listSection("器械情况", card.equipment_notes, card.date),
     "",
-    listSection("未完成内容", card.unfinished_items),
+    listSection("未完成内容", card.unfinished_items, card.date),
     "",
-    listSection("下次建议", card.next_session_suggestions)
+    listSection("下次建议", card.next_session_suggestions, card.date)
   ].join("\n").trimEnd() + "\n";
 }

@@ -3,6 +3,7 @@ import path from "node:path";
 import type { TrainingCard } from "../hermes/types.ts";
 import { ensureStateDirs, getStorePaths, readJson, writeJson } from "./fileStore.ts";
 import { createTrainingCardMarkdown } from "./trainingCardMarkdown.ts";
+import { normalizeRelativeDateText } from "../time/absoluteDateText.ts";
 
 export type DeleteTrainingCardResult = {
   deleted: boolean;
@@ -71,7 +72,7 @@ function normalizeTrainingCard(value: unknown): TrainingCard | null {
 
   if (!date || !hasCompletionSignal) return null;
 
-  return {
+  const normalized = {
     ...value,
     id: text(value.id) || undefined,
     storage_path: text(value.storage_path) || undefined,
@@ -94,6 +95,7 @@ function normalizeTrainingCard(value: unknown): TrainingCard | null {
     unfinished_items: values(value.unfinished_items),
     next_session_suggestions: values(value.next_session_suggestions || value.next_actions).map((item) => text(item)).filter(Boolean)
   };
+  return normalizeRelativeDateText(normalized, date);
 }
 
 async function withMarkdown(card: TrainingCard, jsonPath: string): Promise<TrainingCard> {
