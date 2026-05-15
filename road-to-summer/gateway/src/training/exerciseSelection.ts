@@ -552,7 +552,7 @@ function officialSourceTrace(context: ExerciseSelectionContext, mode: "standard"
       model: "Repetitions in Reserve and readiness-based autoregulation",
       official_source: "NSCA Coach: Using Intensity Based on Sets and Repetitions",
       source_url: "https://www.nsca.com/education/articles/nsca-coach/using-intensity-based-on-sets-and-repetitions-over-50-years-of-experience-a-brief-overview-of-load-setting-and-programming-strategy/",
-      source_location: "NSCA 关于自我调节和 RIR 的资料：训练变量可以根据当天表现、疲劳、准备度和剩余次数感调整。",
+      source_location: "NSCA 关于自我调节和 RIR 的资料：训练变量可以根据目标日期表现、疲劳、准备度和剩余次数感调整。",
       principle: "根据即时表现和主观强度调整重量、次数、组数、休息或动作选择。",
       applied_decision: "每个动作都带下一组调整规则，训练反馈可以改变下一组，不需要推翻整份计划。",
       why_it_matters: "用户能看到为什么说累、太轻、感觉不到目标肌肉时，计划会被动态调整。"

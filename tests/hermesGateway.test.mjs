@@ -518,13 +518,15 @@ test("history list normalizes MiniMax training_card shape with completed_exercis
       { exercise: "胸托哑铃划船", status: "completed", sets_completed: 4 }
     ],
     body_feedback: ["无疼痛"],
-    next_session_suggestions: ["下次检查肩前侧状态"]
+    next_session_suggestions: ["若明天（5月16日）肩前侧仍紧，先做恢复训练"]
   }, ctx.stateRoot);
   const history = await handleHistoryList(ctx);
   assert.equal(history.length, 1);
   assert.equal(history[0].actual_completed.length, 1);
   assert.equal(history[0].actual_completed[0].exercise, "胸托哑铃划船");
   assert.match(history[0].markdown, /胸托哑铃划船/);
+  assert.match(history[0].markdown, /2026-05-16 肩前侧仍紧/);
+  assert.doesNotMatch(history[0].markdown, /明天|日期语义/);
 });
 
 test("backfilled training summary saves training card on target date", async () => {
@@ -534,6 +536,7 @@ test("backfilled training summary saves training card on target date", async () 
   assert.equal(result.ui.training_card.date, result.hermes_output.training_card.date);
   assert.equal(result.ui.training_card.date_label, undefined);
   assert.doesNotMatch(result.ui.training_card.markdown, /日期语义/);
+  assert.doesNotMatch(result.ui.training_card.markdown, /今天|明天|昨天|前天/);
 });
 
 test("explicit text date overrides stale selected date for backfilled card", async () => {
