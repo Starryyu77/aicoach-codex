@@ -2,6 +2,33 @@
 
 本仓库当前先实现「运动健身 AI Agent / Skill / Workflow」的本地 Codex 原型，不做完整 App、教练工作台、SaaS 后台、CRM、排课、支付或会员系统。
 
+## Copyable Local Deployment Prompt
+
+把下面这一段复制给另一个本地 coding agent，对方只需要向使用者索取 MiniMax API key 和豆包/火山 ASR API key：
+
+```text
+你要在本地部署 Starryyu77/aicoach-codex 的 Road to Summer 手机端训练 agent。目标是让所有运行都在本地 Gateway/Next.js 中完成，手机端只是 http://localhost:3000/phone 的前端控制面。
+
+请执行：
+1. Clone 并进入仓库：git clone https://github.com/Starryyu77/aicoach-codex.git && cd aicoach-codex && git checkout codex/phone
+2. 确认 Node.js >= 25、npm >= 11，然后安装依赖：npm install && npm install --prefix road-to-summer/frontend
+3. 启动 Gateway：npm run gateway，默认地址 http://127.0.0.1:8787
+4. 启动前端：npm run dev --prefix road-to-summer/frontend，默认地址 http://localhost:3000
+5. 打开 http://localhost:3000/settings，配置：
+   - Hermes Runtime Model：MiniMax CN for Hermes，填入使用者提供的 MiniMax API key。
+   - Hermes Provider：MiniMax CN Hermes Direct / minimax-cn-hermes，填入同一个 MiniMax API key，并设为 active。这个路径不需要额外启动本地 Hermes API Server。
+   - ASR Provider：Doubao ASR Flash / doubao-asr-flash，填入使用者提供的豆包/火山 ASR API key，并设为 active。
+   - Vision Provider 可以先保留 mock-vision。
+6. 打开 http://localhost:3000/phone，点“新对话”，用文本输入生成训练计划，再测试语音转文字。
+
+要求：
+- 不要把 API key 写入 README、handoff、git commit 或聊天记录；只允许写入本机 .runtime/secrets.env 或通过 Settings 页面保存。
+- 不要启用 mock Hermes 作为 /chat 成功路径；如果 MiniMax/Hermes 请求失败，应显示真实错误，不要生成本地 fallback 计划。
+- 部署后至少运行 npm test、npm run build --prefix road-to-summer/frontend，并手动验证 /phone -> /history -> /phone、刷新、结束训练保存历史这几个流程。
+```
+
+完整交接版见 [`handoffs/outgoing/2026-05-15-local-deployment-agent-handoff.md`](handoffs/outgoing/2026-05-15-local-deployment-agent-handoff.md)。
+
 ## Quick Start
 
 适合外部开发者第一次把项目跑起来。`/chat` 默认要求真实 Hermes Provider；不会用本地 Mock Hermes 冒充模型回复。
